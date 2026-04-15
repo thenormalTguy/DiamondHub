@@ -113,7 +113,8 @@ toggleBtn.MouseButton1Click:Connect(function()
                 local hrp = target.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
                     statusLabel.Text = "Target: " .. target.Name
-                    Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, hrp.Position)
+                    Camera.CameraType = Enum.CameraType.Scriptable
+Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, hrp.Position)
                 end
             else
                 statusLabel.Text = "No visible target"
