@@ -6,11 +6,11 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
---// GLOBAL CONFIG
+--// SETTINGS
 _G.DH_Config = {
     Aimbot = false,
     Rage = false,
-    Smoothness = 0.1,
+    Smoothness = 0.12,
     FOV = 150,
     TeamCheck = true,
     VisibleCheck = true,
@@ -19,13 +19,11 @@ _G.DH_Config = {
     ESP = false,
     ESP_Boxes = true,
     ESP_Names = true,
-    ESP_Dist = true,
     
-    UI_Theme = Color3.fromRGB(0, 170, 255),
-    IsClosed = false
+    AccentColor = Color3.fromRGB(0, 170, 255),
 }
 
---// UI UTILS
+--// UTILS
 local function Create(cls, props, parent)
     local obj = Instance.new(cls)
     for i, v in pairs(props) do obj[i] = v end
@@ -33,190 +31,210 @@ local function Create(cls, props, parent)
     return obj
 end
 
---// MAIN UI FRAMEWORK
-local ScreenGui = Create("ScreenGui", {Name = "DiamondHub_V4", ResetOnSpawn = false})
+local function Round(obj, px)
+    Create("UICorner", {CornerRadius = UDim.new(0, px or 8)}, obj)
+end
+
+--// MAIN UI
+local ScreenGui = Create("ScreenGui", {Name = "DiamondHub_V5", ResetOnSpawn = false})
 pcall(function() ScreenGui.Parent = gethui() or LocalPlayer.PlayerGui end)
 
 local MainFrame = Create("Frame", {
-    Size = UDim2.new(0, 520, 0, 340),
-    Position = UDim2.new(0.5, -260, 0.5, -170),
-    BackgroundColor3 = Color3.fromRGB(15, 15, 15),
+    Size = UDim2.new(0, 550, 0, 350),
+    Position = UDim2.new(0.5, -275, 0.5, -175),
+    BackgroundColor3 = Color3.fromRGB(18, 18, 18),
     BorderSizePixel = 0,
-    ClipsDescendants = true,
 }, ScreenGui)
-Create("UICorner", {CornerRadius = UDim.new(0, 10)}, MainFrame)
+Round(MainFrame, 10)
 
---// TOP BAR (LOGO)
-local TopBar = Create("Frame", {
-    Size = UDim2.new(1, 0, 0, 40),
-    BackgroundColor3 = Color3.fromRGB(20, 20, 20),
+--// TOP HEADER
+local Header = Create("Frame", {
+    Size = UDim2.new(1, 0, 0, 45),
+    BackgroundColor3 = Color3.fromRGB(25, 25, 25),
     BorderSizePixel = 0
 }, MainFrame)
-Create("UICorner", {CornerRadius = UDim.new(0, 10)}, TopBar)
+Round(Header, 10)
 
 local Logo = Create("TextLabel", {
     Text = "DIAMOND<font color='#00AAFF'>HUB</font>",
-    Size = UDim2.new(0, 150, 1, 0),
+    Size = UDim2.new(0, 200, 1, 0),
     Position = UDim2.new(0, 15, 0, 0),
     BackgroundTransparency = 1,
     TextColor3 = Color3.new(1, 1, 1),
     Font = Enum.Font.GothamBold,
-    TextSize = 18,
+    TextSize = 20,
     RichText = true,
     TextXAlignment = "Left"
-}, TopBar)
+}, Header)
 
 --// SIDEBAR
 local Sidebar = Create("Frame", {
-    Size = UDim2.new(0, 130, 1, -40),
-    Position = UDim2.new(0, 0, 0, 40),
-    BackgroundColor3 = Color3.fromRGB(18, 18, 18),
+    Size = UDim2.new(0, 140, 1, -55),
+    Position = UDim2.new(0, 5, 0, 50),
+    BackgroundColor3 = Color3.fromRGB(22, 22, 22),
     BorderSizePixel = 0
 }, MainFrame)
+Round(Sidebar, 8)
+Create("UIListLayout", {Padding = UDim.new(0, 5), HorizontalAlignment = "Center"}, Sidebar)
+Create("UIPadding", {PaddingTop = UDim.new(0, 10)}, Sidebar)
 
-local TabContainer = Create("Frame", {
-    Size = UDim2.new(1, -140, 1, -50),
-    Position = UDim2.new(0, 135, 0, 45),
+--// CONTENT AREA
+local PageContainer = Create("Frame", {
+    Size = UDim2.new(1, -160, 1, -55),
+    Position = UDim2.new(0, 150, 0, 50),
     BackgroundTransparency = 1
 }, MainFrame)
 
---// DYNAMIC TAB SYSTEM
-local Tabs = {}
-local TabBtns = {}
+local Pages = {}
+local Buttons = {}
 
-local function NewTab(name, active)
-    local Page = Create("ScrollingFrame", {
+local function NewPage(name, active)
+    local Scroll = Create("ScrollingFrame", {
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
         Visible = active or false,
-        ScrollBarThickness = 2,
+        ScrollBarThickness = 0,
         CanvasSize = UDim2.new(0, 0, 0, 0),
         AutomaticCanvasSize = Enum.AutomaticCanvasSize.Y
-    }, TabContainer)
-    Create("UIListLayout", {Padding = UDim.new(0, 10), HorizontalAlignment = "Center"}, Page)
+    }, PageContainer)
+    Create("UIListLayout", {Padding = UDim.new(0, 12), HorizontalAlignment = "Center"}, Scroll)
     
     local Btn = Create("TextButton", {
         Text = name,
-        Size = UDim2.new(1, -10, 0, 35),
-        BackgroundTransparency = 1,
+        Size = UDim2.new(0.9, 0, 0, 35),
+        BackgroundColor3 = active and Color3.fromRGB(30, 30, 30) or Color3.fromRGB(22, 22, 22),
         TextColor3 = active and Color3.new(1,1,1) or Color3.fromRGB(150, 150, 150),
         Font = Enum.Font.GothamSemibold,
-        TextSize = 13
+        TextSize = 13,
     }, Sidebar)
-    Create("UIListLayout", {Padding = UDim.new(0, 5)}, Sidebar)
+    Round(Btn, 6)
 
     Btn.MouseButton1Click:Connect(function()
-        for _, t in pairs(Tabs) do t.Visible = false end
-        for _, b in pairs(TabBtns) do b.TextColor3 = Color3.fromRGB(150, 150, 150) end
-        Page.Visible = true
+        for _, p in pairs(Pages) do p.Visible = false end
+        for _, b in pairs(Buttons) do 
+            b.TextColor3 = Color3.fromRGB(150, 150, 150)
+            b.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+        end
+        Scroll.Visible = true
         Btn.TextColor3 = Color3.new(1, 1, 1)
+        Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     end)
     
-    Tabs[name] = Page
-    TabBtns[name] = Btn
-    return Page
+    Pages[name] = Scroll
+    Buttons[name] = Btn
+    return Scroll
 end
 
---// COMPONENTS
-local function AddSection(name, parent)
-    local Sect = Create("Frame", {
-        Size = UDim2.new(0.95, 0, 0, 30),
-        BackgroundColor3 = Color3.fromRGB(22, 22, 22),
+local function AddCard(title, parent)
+    local Card = Create("Frame", {
+        Size = UDim2.new(0.95, 0, 0, 40),
+        BackgroundColor3 = Color3.fromRGB(25, 25, 25),
+        BorderSizePixel = 0
     }, parent)
-    Create("UICorner", {CornerRadius = UDim.new(0, 6)}, Sect)
-    Create("UIListLayout", {Padding = UDim.new(0, 5), HorizontalAlignment = "Center"}, Sect)
+    Round(Card, 8)
+    local List = Create("UIListLayout", {Padding = UDim.new(0, 8), HorizontalAlignment = "Center"}, Card)
+    Create("UIPadding", {PaddingTop = UDim.new(0, 35), PaddingBottom = UDim.new(0, 10)}, Card)
     
     local Label = Create("TextLabel", {
-        Text = "  " .. name,
-        Size = UDim2.new(1, 0, 0, 25),
+        Text = "  " .. title:upper(),
+        Size = UDim2.new(1, 0, 0, 30),
+        Position = UDim2.new(0, 0, 0, -35),
         BackgroundTransparency = 1,
-        TextColor3 = _G.DH_Config.UI_Theme,
+        TextColor3 = _G.DH_Config.AccentColor,
         Font = Enum.Font.GothamBold,
         TextSize = 11,
         TextXAlignment = "Left"
-    }, Sect)
-    
-    Sect.ChildAdded:Connect(function()
-        local h = 30
-        for _, v in pairs(Sect:GetChildren()) do
-            if v:IsA("GuiObject") then h = h + v.Size.Y.Offset + 5 end
+    }, Card)
+
+    -- Auto-resize card based on content
+    local function Resize()
+        local h = 45
+        for _, v in pairs(Card:GetChildren()) do
+            if v:IsA("GuiObject") and v ~= Label then h = h + v.Size.Y.Offset + 8 end
         end
-        Sect.Size = UDim2.new(0.95, 0, 0, h)
-    end)
-    return Sect
+        Card.Size = UDim2.new(0.95, 0, 0, h)
+    end
+    Card.ChildAdded:Connect(Resize)
+    return Card
 end
 
 local function AddToggle(name, parent, configKey)
-    local Tgl = Create("TextButton", {
+    local TglBtn = Create("TextButton", {
         Text = "  " .. name,
-        Size = UDim2.new(0.9, 0, 0, 30),
-        BackgroundColor3 = Color3.fromRGB(30, 30, 30),
-        TextColor3 = Color3.new(0.8, 0.8, 0.8),
+        Size = UDim2.new(0.9, 0, 0, 32),
+        BackgroundColor3 = Color3.fromRGB(35, 35, 35),
+        TextColor3 = Color3.fromRGB(200, 200, 200),
         Font = Enum.Font.Gotham,
         TextSize = 12,
         TextXAlignment = "Left"
     }, parent)
-    Create("UICorner", {CornerRadius = UDim.new(0, 4)}, Tgl)
+    Round(TglBtn, 5)
     
-    local Indicator = Create("Frame", {
-        Size = UDim2.new(0, 15, 0, 15),
-        Position = UDim2.new(1, -25, 0.5, -7),
-        BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    }, Tgl)
-    Create("UICorner", {CornerRadius = UDim.new(1, 0)}, Indicator)
+    local Status = Create("Frame", {
+        Size = UDim2.new(0, 20, 0, 10),
+        Position = UDim2.new(1, -30, 0.5, -5),
+        BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    }, TglBtn)
+    Round(Status, 10)
 
     local function Update()
         local enabled = _G.DH_Config[configKey]
-        TweenService:Create(Indicator, TweenInfo.new(0.3), {BackgroundColor3 = enabled and _G.DH_Config.UI_Theme or Color3.fromRGB(50, 50, 50)}):Play()
-        Tgl.TextColor3 = enabled and Color3.new(1, 1, 1) or Color3.new(0.8, 0.8, 0.8)
+        TweenService:Create(Status, TweenInfo.new(0.2), {BackgroundColor3 = enabled and _G.DH_Config.AccentColor or Color3.fromRGB(60, 60, 60)}):Play()
+        TglBtn.TextColor3 = enabled and Color3.new(1, 1, 1) or Color3.fromRGB(200, 200, 200)
     end
     
-    Tgl.MouseButton1Click:Connect(function()
+    TglBtn.MouseButton1Click:Connect(function()
         _G.DH_Config[configKey] = not _G.DH_Config[configKey]
         Update()
     end)
     Update()
 end
 
---// PAGE INITIALIZATION
-local Home = NewTab("Profile", true)
-local Combat = NewTab("Combat")
-local Visuals = NewTab("Visuals")
+--// CREATE PAGES
+local ProfilePage = NewPage("Your Profile", true)
+local CombatPage = NewPage("Combat")
+local VisualPage = NewPage("Visuals")
 
---// PROFILE TAB
-local ProfSection = AddSection("PLAYER INFO", Home)
+--// PROFILE CONTENT (WITH PFP)
+local ProfCard = AddCard("Account Overview", ProfilePage)
+local PFPFrame = Create("ImageLabel", {
+    Size = UDim2.new(0, 60, 0, 60),
+    Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=150&h=150",
+    BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+}, ProfCard)
+Round(PFPFrame, 30)
+
 Create("TextLabel", {
-    Text = "User: " .. LocalPlayer.DisplayName .. "\nAccount Age: " .. LocalPlayer.AccountAge .. " Days",
-    Size = UDim2.new(0.9, 0, 0, 40), BackgroundTransparency = 1, TextColor3 = Color3.new(1, 1, 1),
-    Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = "Left"
-}, ProfSection)
+    Text = "Welcome, <b>" .. LocalPlayer.DisplayName .. "</b>\nStatus: <font color='#00FF00'>Active</font>",
+    Size = UDim2.new(0.9, 0, 0, 40), BackgroundTransparency = 1,
+    TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.Gotham,
+    TextSize = 13, RichText = true
+}, ProfCard)
 
---// COMBAT TAB
-local AimbotSect = AddSection("AIMBOT SETTINGS", Combat)
-AddToggle("Smooth Lock", AimbotSect, "Aimbot")
-AddToggle("Rage Snap (Instant)", AimbotSect, "Rage")
-AddToggle("Team Check", AimbotSect, "TeamCheck")
-AddToggle("Visible Check", AimbotSect, "VisibleCheck")
+--// COMBAT CONTENT
+local AimCard = AddCard("Aimbot Logic", CombatPage)
+AddToggle("Enable Smooth Aim", AimCard, "Aimbot")
+AddToggle("Enable Rage Snap", AimCard, "Rage")
+AddToggle("Team Check", AimCard, "TeamCheck")
 
---// VISUALS TAB
-local ESPSect = AddSection("ESP SETTINGS", Visuals)
-AddToggle("Enable ESP", ESPSect, "ESP")
-AddToggle("Box Highlights", ESPSect, "ESP_Boxes")
-AddToggle("Show Names", ESPSect, "ESP_Names")
+--// VISUALS CONTENT
+local EspCard = AddCard("ESP Visuals", VisualPage)
+AddToggle("Master ESP", EspCard, "ESP")
+AddToggle("Box ESP", EspCard, "ESP_Boxes")
+AddToggle("Name Tags", EspCard, "ESP_Names")
 
---// AIMBOT LOGIC
-local function GetClosest()
+--// TARGETING SYSTEM
+local function GetTarget()
     local target, closest = nil, _G.DH_Config.FOV
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
             if _G.DH_Config.TeamCheck and p.Team == LocalPlayer.Team then continue end
             if p.Character.Humanoid.Health <= 0 then continue end
-            
-            local pos, onScreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
-            if onScreen then
-                local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
-                if dist < closest then
-                    closest = dist
+            local pos, vis = Camera:WorldToViewportPoint(p.Character.Head.Position)
+            if vis then
+                local mag = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                if mag < closest then
+                    closest = mag
                     target = p
                 end
             end
@@ -225,57 +243,52 @@ local function GetClosest()
     return target
 end
 
---// ESP LOGIC
-local function UpdateESP()
+--// ESP SYSTEM
+local function DoESP()
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
             local char = p.Character
-            local box = char:FindFirstChild("DH_Box") or Create("Highlight", {Name = "DH_Box", FillTransparency = 0.5, OutlineColor = _G.DH_Config.UI_Theme}, char)
-            box.Enabled = _G.DH_Config.ESP and _G.DH_Config.ESP_Boxes
+            local h = char:FindFirstChild("DH_High") or Create("Highlight", {Name = "DH_High", OutlineColor = _G.DH_Config.AccentColor, FillTransparency = 0.6}, char)
+            h.Enabled = _G.DH_Config.ESP and _G.DH_Config.ESP_Boxes
             
-            local nameTag = char:FindFirstChild("DH_Name") or Create("BillboardGui", {Name = "DH_Name", Size = UDim2.new(0, 100, 0, 50), StudsOffset = Vector3.new(0, 3, 0), AlwaysOnTop = true}, char)
-            local label = nameTag:FindFirstChild("Label") or Create("TextLabel", {Name = "Label", Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1), Font = Enum.Font.GothamBold, TextSize = 12}, nameTag)
-            label.Text = p.DisplayName
-            nameTag.Enabled = _G.DH_Config.ESP and _G.DH_Config.ESP_Names
+            local b = char:FindFirstChild("DH_BB") or Create("BillboardGui", {Name = "DH_BB", Size = UDim2.new(0,100,0,50), StudsOffset = Vector3.new(0,3,0), AlwaysOnTop = true}, char)
+            local l = b:FindFirstChild("L") or Create("TextLabel", {Name = "L", Size = UDim2.new(1,0,1,0), BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1), Font = Enum.Font.GothamBold, TextSize = 11}, b)
+            l.Text = p.DisplayName
+            b.Enabled = _G.DH_Config.ESP and _G.DH_Config.ESP_Names
         end
     end
 end
 
---// LOOP
+--// LOOPS
 RunService.RenderStepped:Connect(function()
     if _G.DH_Config.Aimbot or _G.DH_Config.Rage then
-        local t = GetClosest()
-        if t and t.Character:FindFirstChild(_G.DH_Config.TargetPart) then
-            local goal = CFrame.lookAt(Camera.CFrame.Position, t.Character[_G.DH_Config.TargetPart].Position)
+        local t = GetTarget()
+        if t and t.Character:FindFirstChild("Head") then
+            local cf = CFrame.lookAt(Camera.CFrame.Position, t.Character.Head.Position)
             if _G.DH_Config.Rage then
-                Camera.CFrame = goal
+                Camera.CFrame = cf
             else
-                Camera.CFrame = Camera.CFrame:Lerp(goal, _G.DH_Config.Smoothness)
+                Camera.CFrame = Camera.CFrame:Lerp(cf, _G.DH_Config.Smoothness)
             end
         end
     end
-    UpdateESP()
+    DoESP()
 end)
 
---// DRAGGABLE
-local dragging, dragInput, dragStart, startPos
-MainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
+--// DRAG SYSTEM
+local d, di, ds, sp
+MainFrame.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then d = true ds = i.Position sp = MainFrame.Position end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if d and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = i.Position - ds
+        MainFrame.Position = UDim2.new(sp.X.Scale, sp.X.Offset + delta.X, sp.Y.Scale, sp.Y.Offset + delta.Y)
     end
 end)
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-end)
+UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then d = false end end)
 
---// INITIALIZE
+--// OPEN ANIM
+MainFrame.ClipsDescendants = true
 MainFrame.Size = UDim2.new(0, 0, 0, 0)
-MainFrame:TweenSize(UDim2.new(0, 520, 0, 340), "Out", "Back", 0.7)
+MainFrame:TweenSize(UDim2.new(0, 550, 0, 350), "Out", "Back", 0.6)
