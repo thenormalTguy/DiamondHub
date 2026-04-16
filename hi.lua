@@ -11,12 +11,10 @@ _G.DH_Config = {
     Aimbot = false,
     RageHitbox = false,
     HitboxSize = 15,
-    Smoothness = 0.05,
     FOV = 250,
     ESP = false,
     TeamCheck = false,
-    TargetPart = "Head",
-    -- Movement
+    -- Movement (Now in its own category)
     Speed = false,
     WalkSpeedValue = 60,
     Fly = false,
@@ -25,15 +23,21 @@ _G.DH_Config = {
     Accent = Color3.fromRGB(0, 170, 255)
 }
 
---// CLEANUP
+--// CLEANUP & EXECUTION CHECK
+local function GetGuiParent()
+    local success, res = pcall(function() return gethui() end)
+    if success and res then return res end
+    return LocalPlayer:WaitForChild("PlayerGui")
+end
+
 if getgenv().DiamondHub_Loaded then
-    local oldUI = gethui():FindFirstChild("DiamondHub_V10") or LocalPlayer.PlayerGui:FindFirstChild("DiamondHub_V10")
-    if oldUI then oldUI:Destroy() end
+    local existing = GetGuiParent():FindFirstChild("DiamondHub_V10")
+    if existing then existing:Destroy() end
 end
 getgenv().DiamondHub_Loaded = true
 
 --// UI SETUP
-local ScreenGui = Instance.new("ScreenGui", gethui() or LocalPlayer.PlayerGui)
+local ScreenGui = Instance.new("ScreenGui", GetGuiParent())
 ScreenGui.Name = "DiamondHub_V10"
 ScreenGui.ResetOnSpawn = false
 
@@ -44,54 +48,50 @@ Main.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
 Main.BorderSizePixel = 0
 Main.ClipsDescendants = true
 Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
-
--- Glow/Stroke
 local MainStroke = Instance.new("UIStroke", Main)
 MainStroke.Color = _G.DH_Config.Accent
-MainStroke.Thickness = 1.2
-MainStroke.Transparency = 0.4
+MainStroke.Thickness = 1.5
 
---// CONFIRMATION DIALOG (Hidden by default)
+--// CONFIRMATION DIALOG
 local ConfirmFrame = Instance.new("Frame", Main)
 ConfirmFrame.Size = UDim2.new(1, 0, 1, 0)
-ConfirmFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-ConfirmFrame.BackgroundTransparency = 0.2
+ConfirmFrame.BackgroundColor3 = Color3.fromRGB(5, 5, 5)
+ConfirmFrame.BackgroundTransparency = 0.3
 ConfirmFrame.ZIndex = 100
 ConfirmFrame.Visible = false
 
 local ConfirmPop = Instance.new("Frame", ConfirmFrame)
-ConfirmPop.Size = UDim2.new(0, 300, 0, 150)
-ConfirmPop.Position = UDim2.new(0.5, -150, 0.5, -75)
+ConfirmPop.Size = UDim2.new(0, 280, 0, 130)
+ConfirmPop.Position = UDim2.new(0.5, -140, 0.5, -65)
 ConfirmPop.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 ConfirmPop.ZIndex = 101
 Instance.new("UICorner", ConfirmPop).CornerRadius = UDim.new(0, 10)
-Instance.new("UIStroke", ConfirmPop).Color = Color3.fromRGB(40, 40, 40)
 
-local ConfirmTitle = Instance.new("TextLabel", ConfirmPop)
-ConfirmTitle.Text = "Are you sure?"
-ConfirmTitle.Size = UDim2.new(1, 0, 0, 50)
-ConfirmTitle.Font = Enum.Font.GothamBold
-ConfirmTitle.TextColor3 = Color3.new(1, 1, 1)
-ConfirmTitle.BackgroundTransparency = 1
-ConfirmTitle.ZIndex = 102
+local ConfirmText = Instance.new("TextLabel", ConfirmPop)
+ConfirmText.Text = "Close DiamondHub?"
+ConfirmText.Size = UDim2.new(1, 0, 0, 60)
+ConfirmText.Font = Enum.Font.GothamBold
+ConfirmText.TextColor3 = Color3.new(1, 1, 1)
+ConfirmText.BackgroundTransparency = 1
+ConfirmText.ZIndex = 102
 
 local YesBtn = Instance.new("TextButton", ConfirmPop)
-YesBtn.Size = UDim2.new(0, 100, 0, 35)
-YesBtn.Position = UDim2.new(0.5, -110, 0.65, 0)
-YesBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-YesBtn.Text = "Yes, Close"
+YesBtn.Size = UDim2.new(0, 110, 0, 35)
+YesBtn.Position = UDim2.new(0.05, 0, 0.6, 0)
+YesBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+YesBtn.Text = "Confirm"
+YesBtn.TextColor3 = Color3.new(1,1,1)
 YesBtn.Font = Enum.Font.GothamBold
-YesBtn.TextColor3 = Color3.new(1, 1, 1)
 YesBtn.ZIndex = 102
 Instance.new("UICorner", YesBtn).CornerRadius = UDim.new(0, 6)
 
 local NoBtn = Instance.new("TextButton", ConfirmPop)
-NoBtn.Size = UDim2.new(0, 100, 0, 35)
-NoBtn.Position = UDim2.new(0.5, 10, 0.65, 0)
+NoBtn.Size = UDim2.new(0, 110, 0, 35)
+NoBtn.Position = UDim2.new(0.55, 0, 0.6, 0)
 NoBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 NoBtn.Text = "Cancel"
+NoBtn.TextColor3 = Color3.new(1,1,1)
 NoBtn.Font = Enum.Font.GothamBold
-NoBtn.TextColor3 = Color3.new(1, 1, 1)
 NoBtn.ZIndex = 102
 Instance.new("UICorner", NoBtn).CornerRadius = UDim.new(0, 6)
 
@@ -179,7 +179,7 @@ local VisualsTab = CreateTab("Visuals", "👁️", false)
 local MoveTab = CreateTab("Movement", "⚡", false)
 local ProfileTab = CreateTab("Profile", "👤", false)
 
---// TOGGLE HELPER
+--// TOGGLE CREATOR
 local function AddToggle(name, parent, configKey)
     local T = Instance.new("TextButton", parent)
     T.Size = UDim2.new(1, -10, 0, 40)
@@ -202,24 +202,25 @@ local function AddToggle(name, parent, configKey)
     end)
 end
 
-AddToggle("Aimbot (Hold Right-Click)", CombatTab, "Aimbot")
+AddToggle("Aimbot (Right Click)", CombatTab, "Aimbot")
 AddToggle("Hitbox Expander", CombatTab, "RageHitbox")
-AddToggle("ESP Highlights", VisualsTab, "ESP")
+AddToggle("ESP Highlight", VisualsTab, "ESP")
 AddToggle("Speed (60)", MoveTab, "Speed")
-AddToggle("Fly (C-Hold)", MoveTab, "Fly")
-AddToggle("Noclip", MoveTab, "Noclip")
+AddToggle("Fly (WASD)", MoveTab, "Fly")
+AddToggle("Noclip (Walk Thru)", MoveTab, "Noclip")
 
---// PROFILE CONTENT
-local PAvatar = Instance.new("ImageLabel", ProfileTab)
-PAvatar.Size = UDim2.new(0, 60, 0, 60)
-PAvatar.Image = "rbxthumb://type=AvatarHeadShot&id="..LocalPlayer.UserId.."&w=150&h=150"
-Instance.new("UICorner", PAvatar).CornerRadius = UDim.new(1, 0)
+--// PROFILE TAB
+local PImg = Instance.new("ImageLabel", ProfileTab)
+PImg.Size = UDim2.new(0, 70, 0, 70)
+PImg.Image = "rbxthumb://type=AvatarHeadShot&id="..LocalPlayer.UserId.."&w=150&h=150"
+Instance.new("UICorner", PImg).CornerRadius = UDim.new(1, 0)
+
 local PName = Instance.new("TextLabel", ProfileTab)
 PName.Size = UDim2.new(1, 0, 0, 30)
-PName.Text = "Welcome, " .. LocalPlayer.DisplayName
+PName.BackgroundTransparency = 1
+PName.Text = "User: " .. LocalPlayer.Name
 PName.TextColor3 = Color3.new(1,1,1)
 PName.Font = Enum.Font.GothamBold
-PName.BackgroundTransparency = 1
 PName.TextXAlignment = "Left"
 
 --// WINDOW LOGIC
@@ -230,47 +231,45 @@ YesBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy(); getgenv().Diamo
 local Minimized = false
 MinBtn.MouseButton1Click:Connect(function()
     Minimized = not Minimized
-    TweenService:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Back), {Size = Minimized and UDim2.new(0, 550, 0, 45) or UDim2.new(0, 550, 0, 380)}):Play()
+    TweenService:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = Minimized and UDim2.new(0, 550, 0, 45) or UDim2.new(0, 550, 0, 380)}):Play()
 end)
 
--- Dragging
-local d, ds, sp
-Header.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then d = true; ds = i.Position; sp = Main.Position end end)
-UserInputService.InputChanged:Connect(function(i) if d and i.UserInputType == Enum.UserInputType.MouseMovement then
+local drag, ds, sp
+Header.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = true; ds = i.Position; sp = Main.Position end end)
+UserInputService.InputChanged:Connect(function(i) if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
     local delta = i.Position - ds; Main.Position = UDim2.new(sp.X.Scale, sp.X.Offset + delta.X, sp.Y.Scale, sp.Y.Offset + delta.Y)
 end end)
-UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then d = false end end)
+UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end end)
 
---// ENGINE
-local function GetTarget()
-    local nearest = nil; local lastDist = _G.DH_Config.FOV
+--// ENGINE FUNCTIONS
+local function GetClosest()
+    local target = nil; local dist = _G.DH_Config.FOV
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
-            local part = p.Character:FindFirstChild(_G.DH_Config.TargetPart)
-            if part then
-                local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+            local head = p.Character:FindFirstChild("Head")
+            if head then
+                local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if onScreen then
-                    local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
-                    if dist < lastDist then lastDist = dist; nearest = part end
+                    local mag = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                    if mag < dist then dist = mag; target = head end
                 end
             end
         end
     end
-    return nearest
+    return target
 end
 
+-- MAIN LOOP
 RunService.RenderStepped:Connect(function()
     if not getgenv().DiamondHub_Loaded then return end
 
-    -- AIMBOT (Hard Lock)
+    -- Aimbot Hard Lock
     if _G.DH_Config.Aimbot and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-        local target = GetTarget()
-        if target then
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
-        end
+        local t = GetClosest()
+        if t then Camera.CFrame = CFrame.new(Camera.CFrame.Position, t.Position) end
     end
 
-    -- SPEED & FLY & NOCLIP
+    -- Character Movement
     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
         local hum = LocalPlayer.Character.Humanoid
         local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -278,13 +277,15 @@ RunService.RenderStepped:Connect(function()
         hum.WalkSpeed = _G.DH_Config.Speed and _G.DH_Config.WalkSpeedValue or 16
         
         if _G.DH_Config.Fly and root then
-            root.Velocity = Vector3.new(0, 0.1, 0) -- Neutralize gravity
-            if UserInputService:IsKeyDown(Enum.Font.W) then root.CFrame = root.CFrame * CFrame.new(0,0,-_G.DH_Config.FlySpeed/10) end
-            if UserInputService:IsKeyDown(Enum.Font.S) then root.CFrame = root.CFrame * CFrame.new(0,0,_G.DH_Config.FlySpeed/10) end
+            root.Velocity = Vector3.new(0, 0.1, 0)
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then root.CFrame *= CFrame.new(0,0,-_G.DH_Config.FlySpeed/15) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then root.CFrame *= CFrame.new(0,0,_G.DH_Config.FlySpeed/15) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then root.CFrame *= CFrame.new(-_G.DH_Config.FlySpeed/15,0,0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then root.CFrame *= CFrame.new(_G.DH_Config.FlySpeed/15,0,0) end
         end
     end
 
-    -- VISUALS & HITBOX LOOP
+    -- Visuals/Hitbox
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
             local head = p.Character:FindFirstChild("Head")
@@ -293,18 +294,18 @@ RunService.RenderStepped:Connect(function()
                 head.Transparency = _G.DH_Config.RageHitbox and 0.8 or 0
                 head.CanCollide = not _G.DH_Config.RageHitbox
                 
-                local high = p.Character:FindFirstChild("DH_High") or Instance.new("Highlight", p.Character)
-                high.Name = "DH_High"; high.Enabled = _G.DH_Config.ESP; high.FillColor = _G.DH_Config.Accent
+                local h = p.Character:FindFirstChild("DH_H") or Instance.new("Highlight", p.Character)
+                h.Name = "DH_H"; h.Enabled = _G.DH_Config.ESP; h.FillColor = _G.DH_Config.Accent
             end
         end
     end
 end)
 
--- Separate loop for Noclip (Physics)
+-- Noclip physics
 RunService.Stepped:Connect(function()
     if _G.DH_Config.Noclip and LocalPlayer.Character then
-        for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
-            if v:IsA("BasePart") then v.CanCollide = false end
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
         end
     end
 end)
