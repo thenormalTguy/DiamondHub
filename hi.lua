@@ -1,280 +1,289 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
---// SETTINGS
+--// CONFIG
 _G.DH_Config = {
     Aimbot = false,
     Rage = false,
-    Smoothness = 0.12,
-    FOV = 150,
+    Smoothness = 0.15,
+    FOV = 200,
     TeamCheck = true,
-    VisibleCheck = true,
     TargetPart = "Head",
     ESP = false,
-    ESP_Boxes = true,
-    ESP_Names = true,
-    AccentColor = Color3.fromRGB(0, 170, 255),
+    Accent = Color3.fromRGB(0, 170, 255)
 }
 
---// UTILS
-local function Create(cls, props, parent)
-    local obj = Instance.new(cls)
-    for i, v in pairs(props) do obj[i] = v end
-    if parent then obj.Parent = parent end
-    return obj
+--// CLEANUP PREVIOUS
+if getgenv().DiamondHub_Loaded then
+    pcall(function() gethui().DiamondHub_V8:Destroy() end)
+    RunService:UnbindFromRenderStep("DiamondHub_Combat")
 end
+getgenv().DiamondHub_Loaded = true
 
-local function Round(obj, px)
-    Create("UICorner", {CornerRadius = UDim.new(0, px or 8)}, obj)
-end
+--// UI CONSTRUCT
+local ScreenGui = Instance.new("ScreenGui", gethui() or LocalPlayer.PlayerGui)
+ScreenGui.Name = "DiamondHub_V8"
+ScreenGui.ResetOnSpawn = false
 
---// MAIN UI
-local ScreenGui = Create("ScreenGui", {Name = "DiamondHub_V6", ResetOnSpawn = false})
-pcall(function() ScreenGui.Parent = gethui() or LocalPlayer.PlayerGui end)
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.new(0, 500, 0, 320)
+Main.Position = UDim2.new(0.5, -250, 0.5, -160)
+Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+Main.BorderSizePixel = 0
+Main.ClipsDescendants = true -- CRITICAL FOR MINIMIZING
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 8)
 
-local MainFrame = Create("Frame", {
-    Size = UDim2.new(0, 550, 0, 350),
-    Position = UDim2.new(0.5, -275, 0.5, -175),
-    BackgroundColor3 = Color3.fromRGB(15, 15, 15),
-    BorderSizePixel = 0,
-}, ScreenGui)
-Round(MainFrame, 10)
+--// HEADER
+local Header = Instance.new("Frame", Main)
+Header.Size = UDim2.new(1, 0, 0, 40)
+Header.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Header.BorderSizePixel = 0
+Header.ZIndex = 5
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 8)
 
---// TOP HEADER
-local Header = Create("Frame", {
-    Size = UDim2.new(1, 0, 0, 50),
-    BackgroundColor3 = Color3.fromRGB(22, 22, 22),
-    BorderSizePixel = 0,
-    ZIndex = 5
-}, MainFrame)
-Round(Header, 10)
+local Title = Instance.new("TextLabel", Header)
+Title.Text = "DIAMOND<font color='#00AAFF'>HUB</font>"
+Title.RichText = true
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
+Title.TextColor3 = Color3.new(1,1,1)
+Title.Size = UDim2.new(0, 200, 1, 0)
+Title.Position = UDim2.new(0, 15, 0, 0)
+Title.BackgroundTransparency = 1
+Title.TextXAlignment = "Left"
+Title.ZIndex = 5
 
-local Logo = Create("TextLabel", {
-    Text = "DIAMOND<font color='#00AAFF'>HUB</font>",
-    Size = UDim2.new(0, 200, 1, 0),
-    Position = UDim2.new(0, 20, 0, 0),
-    BackgroundTransparency = 1,
-    TextColor3 = Color3.new(1, 1, 1),
-    Font = Enum.Font.GothamBold,
-    TextSize = 22,
-    RichText = true,
-    TextXAlignment = "Left",
-    ZIndex = 6
-}, Header)
+--// WINDOW CONTROLS (X and -)
+local MinBtn = Instance.new("TextButton", Header)
+MinBtn.Size = UDim2.new(0, 30, 0, 30)
+MinBtn.Position = UDim2.new(1, -70, 0, 5)
+MinBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MinBtn.Text = "-"
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.TextColor3 = Color3.new(1,1,1)
+MinBtn.TextSize = 16
+MinBtn.ZIndex = 6
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
 
---// SIDEBAR
-local Sidebar = Create("Frame", {
-    Size = UDim2.new(0, 130, 1, -60),
-    Position = UDim2.new(0, 10, 0, 55),
-    BackgroundColor3 = Color3.fromRGB(18, 18, 18),
-    BorderSizePixel = 0,
-    ZIndex = 2
-}, MainFrame)
-Round(Sidebar, 8)
-local SideList = Create("UIListLayout", {Padding = UDim.new(0, 5), HorizontalAlignment = "Center", SortOrder = Enum.SortOrder.LayoutOrder}, Sidebar)
-Create("UIPadding", {PaddingTop = UDim.new(0, 10)}, Sidebar)
+local CloseBtn = Instance.new("TextButton", Header)
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -35, 0, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseBtn.Text = "X"
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextColor3 = Color3.new(1,1,1)
+CloseBtn.TextSize = 14
+CloseBtn.ZIndex = 6
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
 
---// CONTENT AREA
-local PageContainer = Create("Frame", {
-    Size = UDim2.new(1, -165, 1, -60),
-    Position = UDim2.new(0, 150, 0, 55),
-    BackgroundTransparency = 1,
-    ClipsDescendants = true,
-    ZIndex = 2
-}, MainFrame)
+--// SIDEBAR & CONTAINER
+local Sidebar = Instance.new("Frame", Main)
+Sidebar.Size = UDim2.new(0, 120, 1, -50)
+Sidebar.Position = UDim2.new(0, 10, 0, 45)
+Sidebar.BackgroundTransparency = 1
 
-local Pages = {}
-local Buttons = {}
+local Container = Instance.new("Frame", Main)
+Container.Size = UDim2.new(1, -150, 1, -50)
+Container.Position = UDim2.new(0, 140, 0, 45)
+Container.BackgroundTransparency = 1
 
-local function NewPage(name, order)
-    local Scroll = Create("ScrollingFrame", {
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        Visible = false,
-        ScrollBarThickness = 0,
-        CanvasSize = UDim2.new(0, 0, 2, 0), -- Forced Canvas size
-        ZIndex = 3
-    }, PageContainer)
-    Create("UIListLayout", {Padding = UDim.new(0, 15), HorizontalAlignment = "Center", SortOrder = Enum.SortOrder.LayoutOrder}, Scroll)
-    
-    local Btn = Create("TextButton", {
-        Text = name,
-        Size = UDim2.new(0.9, 0, 0, 38),
-        BackgroundColor3 = Color3.fromRGB(25, 25, 25),
-        TextColor3 = Color3.fromRGB(150, 150, 150),
-        Font = Enum.Font.GothamSemibold,
-        TextSize = 13,
-        LayoutOrder = order,
-        ZIndex = 4
-    }, Sidebar)
-    Round(Btn, 6)
+local Layout = Instance.new("UIListLayout", Container)
+Layout.Padding = UDim.new(0, 10)
+
+--// CLOSE DIALOG OVERLAY
+local Dialog = Instance.new("Frame", Main)
+Dialog.Size = UDim2.new(1, 0, 1, -40)
+Dialog.Position = UDim2.new(0, 0, 0, 40)
+Dialog.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+Dialog.ZIndex = 10
+Dialog.Visible = false
+
+local DialogText = Instance.new("TextLabel", Dialog)
+DialogText.Size = UDim2.new(1, 0, 0, 50)
+DialogText.Position = UDim2.new(0, 0, 0.3, 0)
+DialogText.BackgroundTransparency = 1
+DialogText.Text = "Are you sure you want to close DiamondHub?"
+DialogText.Font = Enum.Font.GothamSemibold
+DialogText.TextColor3 = Color3.new(1,1,1)
+DialogText.TextSize = 16
+DialogText.ZIndex = 11
+
+local YesBtn = Instance.new("TextButton", Dialog)
+YesBtn.Size = UDim2.new(0, 100, 0, 35)
+YesBtn.Position = UDim2.new(0.5, -110, 0.6, 0)
+YesBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+YesBtn.Text = "Yes, Close"
+YesBtn.Font = Enum.Font.GothamBold
+YesBtn.TextColor3 = Color3.new(1,1,1)
+YesBtn.TextSize = 13
+YesBtn.ZIndex = 11
+Instance.new("UICorner", YesBtn).CornerRadius = UDim.new(0, 6)
+
+local NoBtn = Instance.new("TextButton", Dialog)
+NoBtn.Size = UDim2.new(0, 100, 0, 35)
+NoBtn.Position = UDim2.new(0.5, 10, 0.6, 0)
+NoBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+NoBtn.Text = "Cancel"
+NoBtn.Font = Enum.Font.GothamBold
+NoBtn.TextColor3 = Color3.new(1,1,1)
+NoBtn.TextSize = 13
+NoBtn.ZIndex = 11
+Instance.new("UICorner", NoBtn).CornerRadius = UDim.new(0, 6)
+
+--// WINDOW LOGIC (MINIMIZE / CLOSE)
+local IsMinimized = false
+
+MinBtn.MouseButton1Click:Connect(function()
+    IsMinimized = not IsMinimized
+    if IsMinimized then
+        Dialog.Visible = false
+        TweenService:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2.new(0, 500, 0, 40)}):Play()
+    else
+        TweenService:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2.new(0, 500, 0, 320)}):Play()
+    end
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    if IsMinimized then
+        -- Un-minimize first to show the dialog
+        IsMinimized = false
+        TweenService:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2.new(0, 500, 0, 320)}):Play()
+    end
+    Dialog.Visible = true
+end)
+
+NoBtn.MouseButton1Click:Connect(function()
+    Dialog.Visible = false
+end)
+
+YesBtn.MouseButton1Click:Connect(function()
+    -- Fully unload script
+    RunService:UnbindFromRenderStep("DiamondHub_Combat")
+    for _, v in pairs(Players:GetPlayers()) do
+        if v.Character then
+            if v.Character:FindFirstChild("DH_Box") then v.Character.DH_Box:Destroy() end
+            if v.Character:FindFirstChild("DH_Tag") then v.Character.DH_Tag:Destroy() end
+        end
+    end
+    getgenv().DiamondHub_Loaded = false
+    ScreenGui:Destroy()
+end)
+
+--// UI HELPERS
+local function CreateToggle(name, configKey)
+    local Btn = Instance.new("TextButton", Container)
+    Btn.Size = UDim2.new(0.95, 0, 0, 35)
+    Btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Btn.Text = "  " .. name
+    Btn.Font = Enum.Font.Gotham
+    Btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    Btn.TextSize = 13
+    Btn.TextXAlignment = "Left"
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+
+    local Indicator = Instance.new("Frame", Btn)
+    Indicator.Size = UDim2.new(0, 10, 0, 10)
+    Indicator.Position = UDim2.new(1, -20, 0.5, -5)
+    Indicator.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    Instance.new("UICorner", Indicator).CornerRadius = UDim.new(1, 0)
 
     Btn.MouseButton1Click:Connect(function()
-        for _, p in pairs(Pages) do p.Visible = false end
-        for _, b in pairs(Buttons) do 
-            b.TextColor3 = Color3.fromRGB(150, 150, 150)
-            b.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-        end
-        Scroll.Visible = true
-        Btn.TextColor3 = Color3.new(1, 1, 1)
-        Btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        _G.DH_Config[configKey] = not _G.DH_Config[configKey]
+        Indicator.BackgroundColor3 = _G.DH_Config[configKey] and _G.DH_Config.Accent or Color3.fromRGB(50, 50, 50)
+        Btn.TextColor3 = _G.DH_Config[configKey] and Color3.new(1,1,1) or Color3.fromRGB(200, 200, 200)
     end)
-    
-    Pages[name] = Scroll
-    Buttons[name] = Btn
-    return Scroll
 end
 
-local function AddCard(title, parent, order)
-    local Card = Create("Frame", {
-        Size = UDim2.new(0.95, 0, 0, 100), -- Base size
-        BackgroundColor3 = Color3.fromRGB(22, 22, 22),
-        LayoutOrder = order or 1,
-        ZIndex = 3
-    }, parent)
-    Round(Card, 8)
-    
-    local TitleLabel = Create("TextLabel", {
-        Text = title:upper(),
-        Size = UDim2.new(1, -20, 0, 30),
-        Position = UDim2.new(0, 10, 0, 5),
-        BackgroundTransparency = 1,
-        TextColor3 = _G.DH_Config.AccentColor,
-        Font = Enum.Font.GothamBold,
-        TextSize = 12,
-        TextXAlignment = "Left",
-        ZIndex = 4
-    }, Card)
+--// ADDING CONTROLS
+CreateToggle("Legit Aimbot", "Aimbot")
+CreateToggle("Ragebot (Auto-Kill)", "Rage")
+CreateToggle("Team Check", "TeamCheck")
+CreateToggle("Master ESP", "ESP")
 
-    local Content = Create("Frame", {
-        Size = UDim2.new(1, 0, 1, -35),
-        Position = UDim2.new(0, 0, 0, 35),
-        BackgroundTransparency = 1,
-        ZIndex = 3
-    }, Card)
-    Create("UIListLayout", {Padding = UDim.new(0, 8), HorizontalAlignment = "Center"}, Content)
-    
-    -- Auto-resize Logic
-    Content.ChildAdded:Connect(function()
-        local h = 45
-        for _, v in pairs(Content:GetChildren()) do
-            if v:IsA("GuiObject") then h = h + v.Size.Y.Offset + 8 end
-        end
-        Card.Size = UDim2.new(0.95, 0, 0, h)
-    end)
-
-    return Content
-end
-
---// INIT PAGES
-local ProfilePage = NewPage("Profile", 1)
-local CombatPage = NewPage("Combat", 2)
-local VisualPage = NewPage("Visuals", 3)
-
---// 1. PROFILE SECTION
-local ProfContent = AddCard("Account Details", ProfilePage, 1)
-local PFP = Create("ImageLabel", {
-    Size = UDim2.new(0, 64, 0, 64),
-    BackgroundColor3 = Color3.fromRGB(30, 30, 30),
-    Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=150&h=150",
-    ZIndex = 4
-}, ProfContent)
-Round(PFP, 32)
-
-Create("TextLabel", {
-    Text = "Welcome, " .. LocalPlayer.DisplayName .. "\n<font color='#AAAAAA'>@" .. LocalPlayer.Name .. "</font>",
-    Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, TextColor3 = Color3.new(1,1,1),
-    Font = Enum.Font.GothamMedium, TextSize = 14, RichText = true, ZIndex = 4
-}, ProfContent)
-
---// 2. COMBAT SECTION
-local AimContent = AddCard("Aimbot Tools", CombatPage, 1)
-
-local function NewToggle(name, parent, configKey)
-    local Tgl = Create("TextButton", {
-        Text = "  " .. name, Size = UDim2.new(0.9, 0, 0, 32),
-        BackgroundColor3 = Color3.fromRGB(28, 28, 28), TextColor3 = Color3.fromRGB(200, 200, 200),
-        Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = "Left", ZIndex = 4
-    }, parent)
-    Round(Tgl, 5)
-    
-    local Dot = Create("Frame", {
-        Size = UDim2.new(0, 24, 0, 12), Position = UDim2.new(1, -35, 0.5, -6),
-        BackgroundColor3 = Color3.fromRGB(50, 50, 50), ZIndex = 5
-    }, Tgl)
-    Round(Dot, 10)
-
-    local function Update()
-        local enabled = _G.DH_Config[configKey]
-        TweenService:Create(Dot, TweenInfo.new(0.2), {BackgroundColor3 = enabled and _G.DH_Config.AccentColor or Color3.fromRGB(50, 50, 50)}):Play()
-    end
-    Tgl.MouseButton1Click:Connect(function() _G.DH_Config[configKey] = not _G.DH_Config[configKey] Update() end)
-    Update()
-end
-
-NewToggle("Smooth Lock", AimContent, "Aimbot")
-NewToggle("Rage Snap", AimContent, "Rage")
-NewToggle("Team Check", AimContent, "TeamCheck")
-
---// 3. VISUALS SECTION
-local VisualContent = AddCard("Visual Enhancements", VisualPage, 1)
-NewToggle("Enable ESP", VisualContent, "ESP")
-NewToggle("Boxes", VisualContent, "ESP_Boxes")
-NewToggle("Names", VisualContent, "ESP_Names")
-
---// TARGETING & ESP (Same Logic, Optimized)
-local function GetClosest()
-    local target, dist = nil, _G.DH_Config.FOV
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") and p.Character.Humanoid.Health > 0 then
-            if _G.DH_Config.TeamCheck and p.Team == LocalPlayer.Team then continue end
-            local pos, vis = Camera:WorldToViewportPoint(p.Character.Head.Position)
-            if vis then
-                local mag = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
-                if mag < dist then dist = mag target = p end
+--// COMBAT LOGIC
+local function GetClosestPlayer()
+    local Target, Closest = nil, _G.DH_Config.FOV
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Head") then
+            if _G.DH_Config.TeamCheck and v.Team == LocalPlayer.Team then continue end
+            if v.Character.Humanoid.Health <= 0 then continue end
+            
+            local Pos, OnScreen = workspace.CurrentCamera:WorldToViewportPoint(v.Character.Head.Position)
+            if OnScreen then
+                local Dist = (Vector2.new(Pos.X, Pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                if Dist < Closest then
+                    Closest = Dist
+                    Target = v
+                end
             end
         end
     end
-    return target
+    return Target
 end
 
-RunService.RenderStepped:Connect(function()
+RunService:BindToRenderStep("DiamondHub_Combat", Enum.RenderPriority.Camera.Value + 1, function()
     if _G.DH_Config.Aimbot or _G.DH_Config.Rage then
-        local t = GetClosest()
-        if t then
-            local goal = CFrame.lookAt(Camera.CFrame.Position, t.Character.Head.Position)
-            Camera.CFrame = _G.DH_Config.Rage and goal or Camera.CFrame:Lerp(goal, _G.DH_Config.Smoothness)
-        end
-    end
-    -- ESP
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character then
-            local char = p.Character
-            local box = char:FindFirstChild("DH_B") or Create("Highlight", {Name = "DH_B", OutlineColor = _G.DH_Config.AccentColor, FillTransparency = 0.7}, char)
-            box.Enabled = _G.DH_Config.ESP and _G.DH_Config.ESP_Boxes
-            local tag = char:FindFirstChild("DH_T") or Create("BillboardGui", {Name = "DH_T", Size = UDim2.new(0,100,0,40), StudsOffset = Vector3.new(0,3,0), AlwaysOnTop = true}, char)
-            local l = tag:FindFirstChild("L") or Create("TextLabel", {Name="L", Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, TextColor3=Color3.new(1,1,1), Font=Enum.Font.GothamBold, TextSize=11}, tag)
-            l.Text = p.DisplayName tag.Enabled = _G.DH_Config.ESP and _G.DH_Config.ESP_Names
+        local Target = GetClosestPlayer()
+        if Target and Target.Character and Target.Character:FindFirstChild("Head") then
+            local Camera = workspace.CurrentCamera
+            local Goal = CFrame.lookAt(Camera.CFrame.Position, Target.Character.Head.Position)
+            
+            if _G.DH_Config.Rage then
+                Camera.CFrame = Goal
+            else
+                Camera.CFrame = Camera.CFrame:Lerp(Goal, _G.DH_Config.Smoothness)
+            end
         end
     end
 end)
 
---// DRAG
-local d, ds, sp
-MainFrame.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then d = true ds = i.Position sp = MainFrame.Position end end)
-UserInputService.InputChanged:Connect(function(i) if d and i.UserInputType == Enum.UserInputType.MouseMovement then
-    local delta = i.Position - ds MainFrame.Position = UDim2.new(sp.X.Scale, sp.X.Offset + delta.X, sp.Y.Scale, sp.Y.Offset + delta.Y)
-end end)
-UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then d = false end end)
+--// ESP LOGIC
+RunService.RenderStepped:Connect(function()
+    if not getgenv().DiamondHub_Loaded then return end
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character then
+            local Char = v.Character
+            local Box = Char:FindFirstChild("DH_Box") or Instance.new("Highlight", Char)
+            Box.Name = "DH_Box"
+            Box.OutlineColor = _G.DH_Config.Accent
+            Box.Enabled = _G.DH_Config.ESP
+            
+            local Tag = Char:FindFirstChild("DH_Tag") or Instance.new("BillboardGui", Char)
+            Tag.Name = "DH_Tag"
+            Tag.Size = UDim2.new(0, 100, 0, 50)
+            Tag.AlwaysOnTop = true
+            Tag.StudsOffset = Vector3.new(0, 3, 0)
+            
+            local Label = Tag:FindFirstChild("L") or Instance.new("TextLabel", Tag)
+            Label.Name = "L"
+            Label.BackgroundTransparency = 1
+            Label.Size = UDim2.new(1, 0, 1, 0)
+            Label.Text = v.DisplayName
+            Label.Font = Enum.Font.GothamBold
+            Label.TextColor3 = Color3.new(1,1,1)
+            Label.TextSize = 11
+            Tag.Enabled = _G.DH_Config.ESP
+        end
+    end
+end)
 
---// FINAL SHOW
-Pages["Profile"].Visible = true
-Buttons["Profile"].BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-Buttons["Profile"].TextColor3 = Color3.new(1, 1, 1)
-MainFrame.Size = UDim2.new(0, 0, 0, 0)
-MainFrame:TweenSize(UDim2.new(0, 550, 0, 350), "Out", "Back", 0.5)
+--// DRAGGING (Restricted to Header so you can still drag while minimized)
+local Dragging, DragInput, DragStart, StartPos
+Header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Dragging = true; DragStart = input.Position; StartPos = Main.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if Dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local Delta = input.Position - DragStart
+        Main.Position = UDim2.new(StartPos.X.Scale, StartPos.X.Offset + Delta.X, StartPos.Y.Scale, StartPos.Y.Offset + Delta.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then Dragging = false end
+end)
