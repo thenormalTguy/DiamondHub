@@ -43,20 +43,22 @@ ScreenGui.ResetOnSpawn = false
 local Main = Instance.new("Frame", ScreenGui)
 Main.Size = UDim2.new(0, 580, 0, 400)
 Main.Position = UDim2.new(0.5, -290, 0.5, -200)
-Main.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+Main.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
 Main.BorderSizePixel = 0
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
+Main.ClipsDescendants = true -- [FIXED] This ensures elements hide when minimized
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
 
 local MainStroke = Instance.new("UIStroke", Main)
 MainStroke.Color = _G.DH_Config.Accent
 MainStroke.Thickness = 1.5
-MainStroke.Transparency = 0.4
+MainStroke.Transparency = 0.3
 
 --// SIDEBAR
 local Sidebar = Instance.new("Frame", Main)
 Sidebar.Size = UDim2.new(0, 150, 1, 0)
-Sidebar.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 12)
+Sidebar.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+Sidebar.BorderSizePixel = 0
+Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 10)
 
 local TabHolder = Instance.new("Frame", Sidebar)
 TabHolder.Size = UDim2.new(1, 0, 1, -100)
@@ -68,18 +70,18 @@ TabList.HorizontalAlignment = "Center"
 
 --// TOP HEADER
 local Header = Instance.new("Frame", Main)
-Header.Size = UDim2.new(1, -150, 0, 50)
-Header.Position = UDim2.new(0, 150, 0, 0)
+Header.Size = UDim2.new(1, 0, 0, 50)
+Header.Position = UDim2.new(0, 0, 0, 0)
 Header.BackgroundTransparency = 1
 
 local Title = Instance.new("TextLabel", Header)
-Title.Size = UDim2.new(1, -100, 1, 0)
+Title.Size = UDim2.new(0, 150, 1, 0)
 Title.Position = UDim2.new(0, 15, 0, 0)
-Title.Text = "💎 DIAMOND<font color='#00AAFF'>HUB</font>"
+-- [FIXED] Removed default emoji, replaced with clean typography and custom styling
+Title.Text = "<b><font color='#FFFFFF'>DIAMOND</font><font color='#00AAFF'>HUB</font></b>"
 Title.RichText = true
-Title.TextColor3 = Color3.new(1,1,1)
-Title.Font = Enum.Font.GothamBold
-Title.TextSize = 20
+Title.Font = Enum.Font.Gotham
+Title.TextSize = 18
 Title.TextXAlignment = "Left"
 Title.BackgroundTransparency = 1
 
@@ -87,16 +89,18 @@ local CloseBtn = Instance.new("TextButton", Header)
 CloseBtn.Size = UDim2.new(0, 30, 0, 30)
 CloseBtn.Position = UDim2.new(1, -40, 0, 10)
 CloseBtn.Text = "✕"
-CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 75, 75)
 CloseBtn.TextColor3 = Color3.new(1,1,1)
+CloseBtn.Font = Enum.Font.GothamBold
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
 
 local MinBtn = Instance.new("TextButton", Header)
 MinBtn.Size = UDim2.new(0, 30, 0, 30)
 MinBtn.Position = UDim2.new(1, -75, 0, 10)
 MinBtn.Text = "—"
-MinBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MinBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 MinBtn.TextColor3 = Color3.new(1,1,1)
+MinBtn.Font = Enum.Font.GothamBold
 Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
 
 --// CONTAINERS
@@ -111,26 +115,25 @@ local function CreateTab(name, active)
     Frame.Size = UDim2.new(1, 0, 1, 0)
     Frame.BackgroundTransparency = 1
     Frame.Visible = active
-    Frame.ScrollBarThickness = 0
+    Frame.ScrollBarThickness = 2
+    Frame.ScrollBarImageColor3 = _G.DH_Config.Accent
     Instance.new("UIListLayout", Frame).Padding = UDim.new(0, 10)
 
     local Btn = Instance.new("TextButton", TabHolder)
     Btn.Size = UDim2.new(0.85, 0, 0, 40)
-    Btn.BackgroundColor3 = active and _G.DH_Config.Accent or Color3.fromRGB(25, 25, 25)
+    Btn.BackgroundColor3 = active and _G.DH_Config.Accent or Color3.fromRGB(28, 28, 28)
     Btn.Text = name
     Btn.TextColor3 = active and Color3.new(1,1,1) or Color3.fromRGB(150,150,150)
     Btn.Font = Enum.Font.GothamSemibold
-    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
 
     Btn.MouseButton1Click:Connect(function()
         for _, v in pairs(Tabs) do 
             v.F.Visible = false 
-            v.B.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-            v.B.TextColor3 = Color3.fromRGB(150, 150, 150)
+            TweenService:Create(v.B, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(28, 28, 28), TextColor3 = Color3.fromRGB(150, 150, 150)}):Play()
         end
         Frame.Visible = true
-        Btn.BackgroundColor3 = _G.DH_Config.Accent
-        Btn.TextColor3 = Color3.new(1,1,1)
+        TweenService:Create(Btn, TweenInfo.new(0.2), {BackgroundColor3 = _G.DH_Config.Accent, TextColor3 = Color3.new(1,1,1)}):Play()
     end)
     Tabs[name] = {F = Frame, B = Btn}
     return Frame
@@ -144,23 +147,23 @@ local ProfileTab = CreateTab("Profile", false)
 --// TOGGLE SYSTEM
 local function AddToggle(name, parent, key)
     local T = Instance.new("TextButton", parent)
-    T.Size = UDim2.new(1, 0, 0, 45)
-    T.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    T.Text = "     " .. name
-    T.TextColor3 = Color3.fromRGB(200, 200, 200)
+    T.Size = UDim2.new(1, -10, 0, 45)
+    T.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+    T.Text = "      " .. name
+    T.TextColor3 = Color3.fromRGB(220, 220, 220)
     T.Font = Enum.Font.GothamMedium
     T.TextXAlignment = "Left"
-    Instance.new("UICorner", T).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", T).CornerRadius = UDim.new(0, 6)
 
     local Box = Instance.new("Frame", T)
     Box.Size = UDim2.new(0, 36, 0, 18)
     Box.Position = UDim2.new(1, -45, 0.5, -9)
-    Box.BackgroundColor3 = _G.DH_Config[key] and _G.DH_Config.Accent or Color3.fromRGB(40, 40, 40)
+    Box.BackgroundColor3 = _G.DH_Config[key] and _G.DH_Config.Accent or Color3.fromRGB(45, 45, 45)
     Instance.new("UICorner", Box).CornerRadius = UDim.new(1, 0)
 
     T.MouseButton1Click:Connect(function()
         _G.DH_Config[key] = not _G.DH_Config[key]
-        TweenService:Create(Box, TweenInfo.new(0.2), {BackgroundColor3 = _G.DH_Config[key] and _G.DH_Config.Accent or Color3.fromRGB(40, 40, 40)}):Play()
+        TweenService:Create(Box, TweenInfo.new(0.2), {BackgroundColor3 = _G.DH_Config[key] and _G.DH_Config.Accent or Color3.fromRGB(45, 45, 45)}):Play()
     end)
 end
 
@@ -171,7 +174,7 @@ AddToggle("Speed Bypass", MoveTab, "Speed")
 AddToggle("Fly Hack (WASD)", MoveTab, "Fly")
 AddToggle("Noclip", MoveTab, "Noclip")
 
---// PROFILE LOGIC (FIXED)
+--// PROFILE LOGIC
 local function SetupProfile()
     local Layout = Instance.new("UIListLayout", ProfileTab)
     Layout.Padding = UDim.new(0, 15)
@@ -188,8 +191,8 @@ local function SetupProfile()
         l.Size = UDim2.new(1, 0, 0, 30)
         l.Text = txt
         l.TextColor3 = Color3.new(1,1,1)
-        l.Font = Enum.Font.GothamBold
-        l.TextSize = 16
+        l.Font = Enum.Font.GothamSemibold
+        l.TextSize = 15
         l.BackgroundTransparency = 1
     end
 
@@ -203,15 +206,16 @@ SetupProfile()
 local ConfirmOverlay = Instance.new("Frame", Main)
 ConfirmOverlay.Size = UDim2.new(1, 0, 1, 0)
 ConfirmOverlay.BackgroundColor3 = Color3.new(0,0,0)
-ConfirmOverlay.BackgroundTransparency = 1
+ConfirmOverlay.BackgroundTransparency = 0.5
 ConfirmOverlay.Visible = false
 ConfirmOverlay.ZIndex = 500
+Instance.new("UICorner", ConfirmOverlay).CornerRadius = UDim.new(0, 10)
 
 local ConfirmBox = Instance.new("Frame", ConfirmOverlay)
 ConfirmBox.Size = UDim2.new(0, 260, 0, 130)
 ConfirmBox.Position = UDim2.new(0.5, -130, 0.5, -65)
 ConfirmBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-Instance.new("UICorner", ConfirmBox).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", ConfirmBox).CornerRadius = UDim.new(0, 8)
 Instance.new("UIStroke", ConfirmBox).Color = Color3.fromRGB(60, 60, 60)
 
 local Prompt = Instance.new("TextLabel", ConfirmBox)
@@ -219,21 +223,24 @@ Prompt.Size = UDim2.new(1, 0, 0.5, 0)
 Prompt.Text = "Confirm Exit?"
 Prompt.TextColor3 = Color3.new(1,1,1)
 Prompt.Font = Enum.Font.GothamBold
+Prompt.TextSize = 16
 Prompt.BackgroundTransparency = 1
 
 local Yes = Instance.new("TextButton", ConfirmBox)
 Yes.Size = UDim2.new(0, 100, 0, 35)
 Yes.Position = UDim2.new(0.1, 0, 0.6, 0)
-Yes.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+Yes.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
 Yes.Text = "Yes"
+Yes.Font = Enum.Font.GothamBold
 Yes.TextColor3 = Color3.new(1,1,1)
 Instance.new("UICorner", Yes).CornerRadius = UDim.new(0, 6)
 
 local No = Instance.new("TextButton", ConfirmBox)
 No.Size = UDim2.new(0, 100, 0, 35)
 No.Position = UDim2.new(0.55, 0, 0.6, 0)
-No.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+No.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 No.Text = "No"
+No.Font = Enum.Font.GothamBold
 No.TextColor3 = Color3.new(1,1,1)
 Instance.new("UICorner", No).CornerRadius = UDim.new(0, 6)
 
@@ -245,7 +252,7 @@ Yes.MouseButton1Click:Connect(function() ScreenGui:Destroy(); getgenv().DiamondH
 local Mini = false
 MinBtn.MouseButton1Click:Connect(function()
     Mini = not Mini
-    TweenService:Create(Main, TweenInfo.new(0.5, Enum.EasingStyle.Quart), {Size = Mini and UDim2.new(0, 580, 0, 50) or UDim2.new(0, 580, 0, 400)}):Play()
+    TweenService:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Quart), {Size = Mini and UDim2.new(0, 580, 0, 50) or UDim2.new(0, 580, 0, 400)}):Play()
 end)
 
 -- Draggable
