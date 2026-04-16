@@ -1,91 +1,131 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- GUI Setup
+--// SETTINGS
+local SMOOTHNESS = 0.15 -- Lower = Smoother/Slower, Higher = Snappier
+local STICKY_TARGET = true -- Stays on one person until they hide/die
+
+--// GUI SETUP
 local gui = Instance.new("ScreenGui")
-local ok = pcall(function() gui.Parent = gethui() end)
-if not ok then gui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+pcall(function() gui.Parent = gethui() or LocalPlayer:WaitForChild("PlayerGui") end)
 gui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 220, 0, 140)
-frame.Position = UDim2.new(0.5, -110, 0, 20)
-frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-frame.BorderSizePixel = 0
+frame.Size = UDim2.new(0, 220, 0, 170)
+frame.Position = UDim2.new(0.5, -110, 0.1, 0)
+frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 frame.Active = true
 frame.Draggable = true
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", frame)
 
 local title = Instance.new("TextLabel", frame)
-title.Size = UDim2.new(1, 0, 0, 35)
-title.BackgroundColor3 = Color3.fromRGB(50, 50, 150)
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Text = "💎 DiamondHub"
-title.TextScaled = true
-title.Font = Enum.Font.GothamBold
-Instance.new("UICorner", title).CornerRadius = UDim.new(0, 10)
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Text = "💎 DiamondHub V2"
+title.TextColor3 = Color3.new(1,1,1)
+title.BackgroundColor3 = Color3.fromRGB(40, 40, 150)
+Instance.new("UICorner", title)
 
-local toggleBtn = Instance.new("TextButton", frame)
-toggleBtn.Size = UDim2.new(0, 180, 0, 40)
-toggleBtn.Position = UDim2.new(0.5, -90, 0, 45)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.Text = "Focus Nearest: OFF"
-toggleBtn.TextScaled = true
-toggleBtn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 8)
+local focusBtn = Instance.new("TextButton", frame)
+focusBtn.Size = UDim2.new(0.9, 0, 0, 35)
+focusBtn.Position = UDim2.new(0.05, 0, 0.25, 0)
+focusBtn.Text = "Aimbot: OFF"
+focusBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+focusBtn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", focusBtn)
+
+local espBtn = Instance.new("TextButton", frame)
+espBtn.Size = UDim2.new(0.9, 0, 0, 35)
+espBtn.Position = UDim2.new(0.05, 0, 0.5, 0)
+espBtn.Text = "ESP: OFF"
+espBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+espBtn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", espBtn)
 
 local statusLabel = Instance.new("TextLabel", frame)
-statusLabel.Size = UDim2.new(1, 0, 0, 25)
-statusLabel.Position = UDim2.new(0, 0, 0, 100)
+statusLabel.Size = UDim2.new(1, 0, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0.75, 0)
 statusLabel.BackgroundTransparency = 1
-statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 statusLabel.Text = "Idle"
-statusLabel.TextScaled = true
-statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextColor3 = Color3.new(0.8, 0.8, 0.8)
 
--- Logic Variables
+--// LOGIC VARIABLES
 local focusEnabled = false
-local connection = nil
+local espEnabled = false
+local currentTarget = nil
 
--- Improved Visibility Check (checks from Camera to Target Head)
-local function isVisible(targetChar)
-    if not targetChar then return false end
-    local head = targetChar:FindFirstChild("Head")
-    if not head then return false end
-
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, targetChar}
-    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+--// ESP FUNCTION
+local function createESP(player)
+    if player == LocalPlayer then return end
     
-    -- Raycast from Camera to Target Head
-    local direction = head.Position - Camera.CFrame.Position
-    local result = workspace:Raycast(Camera.CFrame.Position, direction, raycastParams)
+    local function setupESP(char)
+        if not char then return end
+        
+        -- Highlight (Box effect)
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "ESP_Highlight"
+        highlight.FillTransparency = 0.5
+        highlight.OutlineTransparency = 0
+        highlight.FillColor = Color3.new(1, 0, 0)
+        highlight.Parent = char
+        highlight.Enabled = espEnabled
+        
+        -- Billboard (Name tag)
+        local bb = Instance.new("BillboardGui")
+        bb.Name = "ESP_Name"
+        bb.Size = UDim2.new(0, 100, 0, 50)
+        bb.StudsOffset = Vector3.new(0, 3, 0)
+        bb.AlwaysOnTop = true
+        bb.Parent = char
+        bb.Enabled = espEnabled
+        
+        local label = Instance.new("TextLabel", bb)
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Color3.new(1, 1, 1)
+        label.TextStrokeTransparency = 0
+        label.Text = player.Name
+        label.Font = Enum.Font.GothamBold
+    end
+    
+    player.CharacterAdded:Connect(setupESP)
+    if player.Character then setupESP(player.Character) end
+end
 
+--// VISIBILITY CHECK
+local function isVisible(player)
+    local char = player.Character
+    if not char or not char:FindFirstChild("Head") then return false end
+    
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {LocalPlayer.Character, char}
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    
+    local origin = Camera.CFrame.Position
+    local dest = char.Head.Position
+    local result = workspace:Raycast(origin, dest - origin, params)
+    
     return result == nil
 end
 
-local function getNearestVisible()
-    local localChar = LocalPlayer.Character
-    if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return nil end
-    
-    local nearest = nil
-    local nearestDist = math.huge
+--// TARGETING
+local function getBestTarget()
+    -- Stick to current target if they are still visible and alive
+    if STICKY_TARGET and currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("Humanoid") then
+        if currentTarget.Character.Humanoid.Health > 0 and isVisible(currentTarget) then
+            return currentTarget
+        end
+    end
 
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player == LocalPlayer then continue end
-        local char = player.Character
-        if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
-            if char.Humanoid.Health > 0 then
-                local dist = (char.HumanoidRootPart.Position - localChar.HumanoidRootPart.Position).Magnitude
-                if dist < nearestDist then
-                    if isVisible(char) then
-                        nearest = player
-                        nearestDist = dist
-                    end
+    local nearest, dist = nil, math.huge
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            if p.Character.Humanoid.Health > 0 and isVisible(p) then
+                local d = (p.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                if d < dist then
+                    nearest = p
+                    dist = d
                 end
             end
         end
@@ -93,35 +133,43 @@ local function getNearestVisible()
     return nearest
 end
 
-toggleBtn.MouseButton1Click:Connect(function()
+--// CONNECTIONS
+focusBtn.MouseButton1Click:Connect(function()
     focusEnabled = not focusEnabled
+    focusBtn.Text = focusEnabled and "Aimbot: ON" or "Aimbot: OFF"
+    focusBtn.BackgroundColor3 = focusEnabled and Color3.fromRGB(0, 150, 80) or Color3.fromRGB(50, 50, 50)
+    if not focusEnabled then currentTarget = nil end
+end)
+
+espBtn.MouseButton1Click:Connect(function()
+    espEnabled = not espEnabled
+    espBtn.Text = espEnabled and "ESP: ON" or "ESP: OFF"
+    espBtn.BackgroundColor3 = espEnabled and Color3.fromRGB(0, 150, 80) or Color3.fromRGB(50, 50, 50)
     
-    if focusEnabled then
-        toggleBtn.Text = "Focus Nearest: ON"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 80)
-        
-        connection = RunService.RenderStepped:Connect(function()
-            -- Ensure Camera is indexed correctly in case of respawn
-            Camera = workspace.CurrentCamera
-            
-            local target = getNearestVisible()
-            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-                local targetPos = target.Character.HumanoidRootPart.Position
-                statusLabel.Text = "Target: " .. target.Name
-                
-                -- Smoothly rotate camera without locking it to Scriptable
-                Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
-            else
-                statusLabel.Text = "No visible target"
-            end
-        end)
-    else
-        toggleBtn.Text = "Focus Nearest: OFF"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-        statusLabel.Text = "Idle"
-        if connection then
-            connection:Disconnect()
-            connection = nil
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Character then
+            if p.Character:FindFirstChild("ESP_Highlight") then p.Character.ESP_Highlight.Enabled = espEnabled end
+            if p.Character:FindFirstChild("ESP_Name") then p.Character.ESP_Name.Enabled = espEnabled end
         end
     end
 end)
+
+RunService.RenderStepped:Connect(function()
+    if focusEnabled then
+        currentTarget = getBestTarget()
+        if currentTarget and currentTarget.Character and currentTarget.Character:FindFirstChild("Head") then
+            statusLabel.Text = "Locking: " .. currentTarget.Name
+            
+            -- Smooth camera movement using Lerp
+            local targetPos = currentTarget.Character.Head.Position
+            local lookAtCFrame = CFrame.lookAt(Camera.CFrame.Position, targetPos)
+            Camera.CFrame = Camera.CFrame:Lerp(lookAtCFrame, SMOOTHNESS)
+        else
+            statusLabel.Text = "Searching..."
+        end
+    end
+end)
+
+-- Initialize ESP for players
+for _, p in pairs(Players:GetPlayers()) do createESP(p) end
+Players.PlayerAdded:Connect(createESP)
