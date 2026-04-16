@@ -591,10 +591,13 @@ local success, err = pcall(function()
     Sidebar.Size = UDim2.new(0,168,1,0)
 
     local SidebarLayout = Instance.new("UIListLayout", Sidebar)
-    SidebarLayout.Padding = UDim.new(0,6)
-    SidebarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    SidebarLayout.Padding = UDim.new(0,2)
+    SidebarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    SidebarLayout.FillDirection = Enum.FillDirection.Vertical
     SidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    Instance.new("UIPadding", Sidebar).PaddingTop = UDim.new(0,14)
+    local SidebarPad = Instance.new("UIPadding", Sidebar)
+    SidebarPad.PaddingTop = UDim.new(0,12)
+    SidebarPad.PaddingBottom = UDim.new(0,8)
 
     -- Sidebar divider
     local SideDiv = MakeFrame(RivalsContent, {BackgroundColor3 = Color3.fromRGB(35,35,50)})
@@ -608,69 +611,81 @@ local success, err = pcall(function()
 
     local RivalsTabs = {}
     local function CreateTab(name, icon, layoutOrder, active)
-        -- Page
+        -- Page (scrolling content area)
         local Frame = Instance.new("ScrollingFrame", Pages)
-        Frame.Size = UDim2.new(1,-6,1,-16)
-        Frame.Position = UDim2.new(0,3,0,8)
+        Frame.Size = UDim2.new(1,0,1,-10)
+        Frame.Position = UDim2.new(0,0,0,5)
         Frame.BackgroundTransparency = 1
         Frame.Visible = active
-        Frame.ScrollBarThickness = 3
-        Frame.ScrollBarImageColor3 = ACCENT
+        Frame.ScrollBarThickness = 2
+        Frame.ScrollBarImageColor3 = Color3.fromRGB(60,60,90)
         Frame.CanvasSize = UDim2.new(0,0,0,0)
         Frame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        Frame.BorderSizePixel = 0
         local Layout = Instance.new("UIListLayout", Frame)
-        Layout.Padding = UDim.new(0,10)
+        Layout.Padding = UDim.new(0,8)
         Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        Instance.new("UIPadding", Frame).PaddingTop = UDim.new(0,6)
+        local FPad = Instance.new("UIPadding", Frame)
+        FPad.PaddingTop = UDim.new(0,10)
+        FPad.PaddingLeft = UDim.new(0,12)
+        FPad.PaddingRight = UDim.new(0,12)
 
-        -- Sidebar button
-        local Btn = Instance.new("TextButton", Sidebar)
-        Btn.LayoutOrder = layoutOrder
-        Btn.Size = UDim2.new(1,-16,0,40)
-        Btn.BackgroundColor3 = active and ACCENT or BG_ITEM
+        -- Sidebar button wrapper (for the accent bar + button together)
+        local BtnWrap = Instance.new("Frame", Sidebar)
+        BtnWrap.LayoutOrder = layoutOrder
+        BtnWrap.Size = UDim2.new(1,0,0,38)
+        BtnWrap.BackgroundTransparency = 1
+        BtnWrap.BorderSizePixel = 0
+
+        -- Thin left accent bar (only visible when active)
+        local Bar = Instance.new("Frame", BtnWrap)
+        Bar.Size = UDim2.new(0,3,0.6,0)
+        Bar.Position = UDim2.new(0,0,0.2,0)
+        Bar.BackgroundColor3 = ACCENT
+        Bar.BorderSizePixel = 0
+        Bar.BackgroundTransparency = active and 0 or 1
+        MakeCorner(Bar, 2)
+
+        -- Actual button
+        local Btn = Instance.new("TextButton", BtnWrap)
+        Btn.Size = UDim2.new(1,-12,1,0)
+        Btn.Position = UDim2.new(0,8,0,0)
+        Btn.BackgroundColor3 = active and Color3.fromRGB(30,32,46) or Color3.new(0,0,0)
+        Btn.BackgroundTransparency = active and 0 or 1
         Btn.TextColor3 = active and Color3.new(1,1,1) or TEXT_DIM
         Btn.Font = Enum.Font.GothamBold
-        Btn.TextSize = 14
+        Btn.TextSize = 13
         Btn.Text = icon .. "  " .. name
         Btn.TextXAlignment = Enum.TextXAlignment.Left
         Btn.AutoButtonColor = false
         Btn.BorderSizePixel = 0
-        MakeCorner(Btn, 8)
-        if active then
-            local lPad = Instance.new("UIPadding", Btn)
-            lPad.PaddingLeft = UDim.new(0,12)
-        else
-            local lPad = Instance.new("UIPadding", Btn)
-            lPad.PaddingLeft = UDim.new(0,12)
-        end
-
-        if active then MakeStroke(Btn, ACCENT, 1, 0.5) end
+        MakeCorner(Btn, 7)
+        local BPad = Instance.new("UIPadding", Btn)
+        BPad.PaddingLeft = UDim.new(0,10)
 
         Btn.MouseEnter:Connect(function()
             if not (RivalsTabs[name] and RivalsTabs[name].F.Visible) then
-                Tween(Btn, 0.15, {BackgroundColor3 = Color3.fromRGB(32,32,44)})
+                Tween(Btn, 0.12, {BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(26,26,38)})
             end
         end)
         Btn.MouseLeave:Connect(function()
             if not (RivalsTabs[name] and RivalsTabs[name].F.Visible) then
-                Tween(Btn, 0.15, {BackgroundColor3 = BG_ITEM})
+                Tween(Btn, 0.12, {BackgroundTransparency = 1})
             end
         end)
 
         Btn.MouseButton1Click:Connect(function()
             for n, v in pairs(RivalsTabs) do
                 v.F.Visible = false
-                Tween(v.B, 0.15, {BackgroundColor3 = BG_ITEM, TextColor3 = TEXT_DIM})
-                for _, s in pairs(v.B:GetChildren()) do
-                    if s:IsA("UIStroke") then s:Destroy() end
-                end
+                Tween(v.B, 0.15, {BackgroundColor3 = Color3.new(0,0,0), BackgroundTransparency = 1, TextColor3 = TEXT_DIM})
+                Tween(v.Bar, 0.15, {BackgroundTransparency = 1})
             end
             Frame.Visible = true
-            Tween(Btn, 0.15, {BackgroundColor3 = ACCENT, TextColor3 = Color3.new(1,1,1)})
-            MakeStroke(Btn, ACCENT, 1, 0.5)
+            Tween(Btn, 0.15, {BackgroundColor3 = Color3.fromRGB(30,32,46), BackgroundTransparency = 0, TextColor3 = Color3.new(1,1,1)})
+            Tween(Bar, 0.15, {BackgroundTransparency = 0})
         end)
 
-        RivalsTabs[name] = {F = Frame, B = Btn}
+        RivalsTabs[name] = {F = Frame, B = Btn, Bar = Bar}
         return Frame
     end
 
@@ -681,49 +696,63 @@ local success, err = pcall(function()
     local ProfileTab = CreateTab("Profile",   "👤", 5, false)
     local DiscordTab = CreateTab("Discord",   "💬", 6, false)
 
-    --// SECTION HEADER
+    --// SECTION HEADER — subtle divider + label
     local function SectionHeader(parent, text)
-        local lbl = MakeLabel(parent, {
+        local wrap = MakeFrame(parent, {Transparency = 1})
+        wrap.Size = UDim2.new(1,0,0,22)
+
+        local line = MakeFrame(wrap, {BackgroundColor3 = Color3.fromRGB(38,38,54)})
+        line.Size = UDim2.new(1,0,0,1)
+        line.Position = UDim2.new(0,0,0.5,0)
+
+        local lbl = MakeLabel(wrap, {
             Text = text,
-            TextSize = 11,
+            TextSize = 10,
             Font = Enum.Font.GothamBold,
-            TextColor3 = TEXT_DIM,
+            TextColor3 = Color3.fromRGB(80,80,105),
             TextXAlignment = Enum.TextXAlignment.Left,
-            Size = UDim2.new(1,-8,0,20),
+            Size = UDim2.new(0,0,1,0),
         })
-        return lbl
+        lbl.AutomaticSize = Enum.AutomaticSize.X
+        lbl.BackgroundColor3 = BG_MAIN
+        lbl.BackgroundTransparency = 0
+        local lp = Instance.new("UIPadding", lbl)
+        lp.PaddingRight = UDim.new(0,6)
+        lp.PaddingLeft = UDim.new(0,0)
+
+        return wrap
     end
 
     --// TOGGLE
     local function AddToggle(parent, label, key)
         local Row = MakeFrame(parent, {BackgroundColor3 = BG_CARD, Radius = 10})
-        Row.Size = UDim2.new(1,-8,0,54)
+        Row.Size = UDim2.new(1,0,0,52)
 
         local Lbl = MakeLabel(Row, {
             Text = label,
-            TextSize = 15,
+            TextSize = 14,
             Font = Enum.Font.GothamMedium,
-            TextColor3 = Color3.fromRGB(220,220,235),
+            TextColor3 = Color3.fromRGB(210,210,225),
             TextXAlignment = Enum.TextXAlignment.Left,
-            Size = UDim2.new(1,-80,1,0),
+            Size = UDim2.new(1,-70,1,0),
             Position = UDim2.new(0,16,0,0),
         })
 
         local PillBG = MakeFrame(Row, {
-            BackgroundColor3 = _G.DH_Config[key] and ACCENT or Color3.fromRGB(45,45,60),
+            BackgroundColor3 = _G.DH_Config[key] and ACCENT or Color3.fromRGB(40,40,58),
             Radius = 100,
         })
-        PillBG.Size = UDim2.new(0,48,0,26)
-        PillBG.Position = UDim2.new(1,-64,0.5,-13)
+        PillBG.Size = UDim2.new(0,44,0,24)
+        PillBG.Position = UDim2.new(1,-56,0.5,-12)
 
         local Dot = MakeFrame(PillBG, {BackgroundColor3 = Color3.new(1,1,1), Radius = 100})
-        Dot.Size = UDim2.new(0,20,0,20)
-        Dot.Position = _G.DH_Config[key] and UDim2.new(1,-23,0.5,-10) or UDim2.new(0,3,0.5,-10)
+        Dot.Size = UDim2.new(0,18,0,18)
+        Dot.Position = _G.DH_Config[key] and UDim2.new(1,-21,0.5,-9) or UDim2.new(0,3,0.5,-9)
 
         local function Refresh()
             local on = _G.DH_Config[key]
-            Tween(PillBG, 0.25, {BackgroundColor3 = on and ACCENT or Color3.fromRGB(45,45,60)}, Enum.EasingStyle.Quad)
-            Tween(Dot, 0.25, {Position = on and UDim2.new(1,-23,0.5,-10) or UDim2.new(0,3,0.5,-10)}, Enum.EasingStyle.Back)
+            Tween(PillBG, 0.22, {BackgroundColor3 = on and ACCENT or Color3.fromRGB(40,40,58)}, Enum.EasingStyle.Quad)
+            Tween(Dot, 0.22, {Position = on and UDim2.new(1,-21,0.5,-9) or UDim2.new(0,3,0.5,-9)}, Enum.EasingStyle.Back)
         end
 
         Row.InputBegan:Connect(function(i)
@@ -732,55 +761,114 @@ local success, err = pcall(function()
                 Refresh()
             end
         end)
-        Row.MouseEnter:Connect(function() Tween(Row, 0.12, {BackgroundColor3 = Color3.fromRGB(30,30,42)}) end)
-        Row.MouseLeave:Connect(function() Tween(Row, 0.12, {BackgroundColor3 = BG_CARD}) end)
+        Row.MouseEnter:Connect(function() Tween(Row, 0.1, {BackgroundColor3 = Color3.fromRGB(28,30,44)}) end)
+        Row.MouseLeave:Connect(function() Tween(Row, 0.1, {BackgroundColor3 = BG_CARD}) end)
 
         return Row
     end
 
-    --// HOME TAB
-    local HomeBanner = MakeFrame(HomeTab, {BackgroundColor3 = BG_CARD, Radius = 12})
-    HomeBanner.Size = UDim2.new(1,-8,0,90)
-    MakeStroke(HomeBanner, ACCENT, 1, 0.5)
+    --// HOME TAB — Welcome screen only, no duplicate toggles
+    -- Player card
+    local HomeCard = MakeFrame(HomeTab, {BackgroundColor3 = BG_CARD, Radius = 12})
+    HomeCard.Size = UDim2.new(1,0,0,96)
 
-    MakeLabel(HomeBanner, {
-        Text = "💎  DIAMOND HUB",
-        TextSize = 22,
-        Font = Enum.Font.GothamBlack,
+    local HAvatarBG = MakeFrame(HomeCard, {BackgroundColor3 = BG_ITEM, Radius = 36})
+    HAvatarBG.Size = UDim2.new(0,64,0,64)
+    HAvatarBG.Position = UDim2.new(0,16,0.5,-32)
+    MakeStroke(HAvatarBG, ACCENT, 2, 0.5)
+
+    local HAvatar = Instance.new("ImageLabel", HomeCard)
+    HAvatar.Size = UDim2.new(0,64,0,64)
+    HAvatar.Position = UDim2.new(0,16,0.5,-32)
+    HAvatar.BackgroundTransparency = 1
+    HAvatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=150&h=150"
+    MakeCorner(HAvatar, 32)
+
+    MakeLabel(HomeCard, {
+        Text = LocalPlayer.DisplayName,
+        TextSize = 17,
+        Font = Enum.Font.GothamBold,
         TextColor3 = Color3.new(1,1,1),
         TextXAlignment = Enum.TextXAlignment.Left,
-        Size = UDim2.new(1,-20,0,30),
-        Position = UDim2.new(0,16,0,14),
+        Size = UDim2.new(1,-100,0,22),
+        Position = UDim2.new(0,92,0,22),
     })
-    MakeLabel(HomeBanner, {
-        Text = "Rivals — Hub Edition  v2.0",
-        TextSize = 13,
+    MakeLabel(HomeCard, {
+        Text = "@" .. LocalPlayer.Name,
+        TextSize = 12,
         Font = Enum.Font.Gotham,
         TextColor3 = TEXT_DIM,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Size = UDim2.new(1,-20,0,20),
-        Position = UDim2.new(0,16,0,46),
+        Size = UDim2.new(1,-100,0,18),
+        Position = UDim2.new(0,92,0,46),
+    })
+    MakeLabel(HomeCard, {
+        Text = "Account age: " .. LocalPlayer.AccountAge .. " days",
+        TextSize = 11,
+        Font = Enum.Font.Gotham,
+        TextColor3 = Color3.fromRGB(100,100,120),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-100,0,16),
+        Position = UDim2.new(0,92,0,68),
     })
 
-    local StatusDot = MakeFrame(HomeBanner, {BackgroundColor3 = Color3.fromRGB(50,220,100), Radius = 100})
-    StatusDot.Size = UDim2.new(0,10,0,10)
-    StatusDot.Position = UDim2.new(0,16,0,70)
+    -- Hub info card
+    local HInfoCard = MakeFrame(HomeTab, {BackgroundColor3 = BG_CARD, Radius = 12})
+    HInfoCard.Size = UDim2.new(1,0,0,72)
 
-    MakeLabel(HomeBanner, {
-        Text = "All systems active",
+    -- Left blue accent stripe
+    local HStripe = MakeFrame(HInfoCard, {BackgroundColor3 = ACCENT, Radius = 4})
+    HStripe.Size = UDim2.new(0,3,0.7,0)
+    HStripe.Position = UDim2.new(0,12,0.15,0)
+
+    MakeLabel(HInfoCard, {
+        Text = "Diamond Hub",
+        TextSize = 16,
+        Font = Enum.Font.GothamBlack,
+        TextColor3 = Color3.new(1,1,1),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-80,0,22),
+        Position = UDim2.new(0,26,0,14),
+    })
+    MakeLabel(HInfoCard, {
+        Text = "Rivals Edition  •  v2.0",
         TextSize = 12,
         Font = Enum.Font.Gotham,
-        TextColor3 = Color3.fromRGB(50,220,100),
+        TextColor3 = TEXT_DIM,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Size = UDim2.new(1,-40,0,16),
-        Position = UDim2.new(0,32,0,67),
+        Size = UDim2.new(1,-80,0,18),
+        Position = UDim2.new(0,26,0,38),
     })
 
-    -- Quick toggles on home
-    SectionHeader(HomeTab, "QUICK TOGGLES")
-    AddToggle(HomeTab, "Aimbot (Hard Lock)", "Aimbot")
-    AddToggle(HomeTab, "Speed Bypass", "Speed")
-    AddToggle(HomeTab, "ESP Highlights", "ESP")
+    -- Status pill (top right)
+    local HStatusPill = MakeFrame(HInfoCard, {BackgroundColor3 = Color3.fromRGB(20,48,28), Radius = 100})
+    HStatusPill.Size = UDim2.new(0,90,0,24)
+    HStatusPill.Position = UDim2.new(1,-102,0.5,-12)
+
+    local HSDot = MakeFrame(HStatusPill, {BackgroundColor3 = Color3.fromRGB(60,230,110), Radius = 100})
+    HSDot.Size = UDim2.new(0,8,0,8)
+    HSDot.Position = UDim2.new(0,10,0.5,-4)
+
+    MakeLabel(HStatusPill, {
+        Text = "Active",
+        TextSize = 12,
+        Font = Enum.Font.GothamBold,
+        TextColor3 = Color3.fromRGB(60,230,110),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-24,1,0),
+        Position = UDim2.new(0,24,0,0),
+    })
+
+    -- Hint
+    local HHint = MakeLabel(HomeTab, {
+        Text = "Use the sidebar to navigate to Combat, Visuals, and more.",
+        TextSize = 12,
+        Font = Enum.Font.Gotham,
+        TextColor3 = Color3.fromRGB(80,80,100),
+        TextXAlignment = Enum.TextXAlignment.Center,
+        Size = UDim2.new(1,0,0,18),
+        TextWrapped = true,
+    })
 
     --// COMBAT TAB
     SectionHeader(CombatTab, "COMBAT")
@@ -799,7 +887,7 @@ local success, err = pcall(function()
 
     --// PROFILE TAB
     local PCard = MakeFrame(ProfileTab, {BackgroundColor3 = BG_CARD, Radius = 12})
-    PCard.Size = UDim2.new(1,-8,0,120)
+    PCard.Size = UDim2.new(1,0,0,110)
 
     local PImg = Instance.new("ImageLabel", PCard)
     PImg.Size = UDim2.new(0,72,0,72)
@@ -839,7 +927,7 @@ local success, err = pcall(function()
 
     --// DISCORD TAB
     local DiscCard = MakeFrame(DiscordTab, {BackgroundColor3 = BG_CARD, Radius = 12})
-    DiscCard.Size = UDim2.new(1,-8,0,130)
+    DiscCard.Size = UDim2.new(1,0,0,116)
     MakeStroke(DiscCard, Color3.fromRGB(88,101,242), 1.5, 0.3)
 
     MakeLabel(DiscCard, {
@@ -879,8 +967,8 @@ local success, err = pcall(function()
     local CopyBtn = MakeButton(DiscordTab, {
         Text = "Copy Invite Link",
         BackgroundColor3 = Color3.fromRGB(88,101,242),
-        Size = UDim2.new(1,-8,0,40),
-        TextSize = 15,
+        Size = UDim2.new(1,0,0,40),
+        TextSize = 14,
         Radius = 10,
     })
     CopyBtn.MouseButton1Click:Connect(function()
