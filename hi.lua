@@ -1,329 +1,1120 @@
-local TweenService = game:GetService("TweenService")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+--// DIAMOND HUB — Script Hub
+--// Version: 2.0 | Hub Edition
 
---// GUI PARENTING
-local function GetGui()
-    local success, core = pcall(function() return game:GetService("CoreGui") end)
-    if gethui then return gethui() end
-    if success and core:FindFirstChild("RobloxGui") then return core.RobloxGui end
-    return LocalPlayer:WaitForChild("PlayerGui")
-end
+local success, err = pcall(function()
 
-if getgenv().DiamondHub_Loaded then
-    local old = GetGui():FindFirstChild("DiamondHub_Master")
-    if old then old:Destroy() end
-end
-getgenv().DiamondHub_Loaded = true
-
---// CREATE MASTER GUI
-local ScreenGui = Instance.new("ScreenGui", GetGui())
-ScreenGui.Name = "DiamondHub_Master"
-ScreenGui.ResetOnSpawn = false
-
---=========================================--
---      PHASE 3: THE RIVALS SCRIPT         --
---=========================================--
-local function LoadRivalsScript()
-    local RunService = game:GetService("RunService")
+    --// SERVICES
+    local Players         = game:GetService("Players")
+    local RunService      = game:GetService("RunService")
     local UserInputService = game:GetService("UserInputService")
-    local Camera = workspace.CurrentCamera
-    local Mouse = LocalPlayer:GetMouse()
+    local TweenService    = game:GetService("TweenService")
+    local LocalPlayer     = Players.LocalPlayer
+    local Camera          = workspace.CurrentCamera
+    local Mouse           = LocalPlayer:GetMouse()
 
-    -- We wrap the entire V10 Rivals script here
-    _G.DH_Config = { Aimbot=false, RageHitbox=false, HitboxSize=15, FOV=250, ESP=false, Speed=false, WalkSpeedValue=60, Fly=false, FlySpeed=50, Noclip=false, Accent=Color3.fromRGB(0, 170, 255) }
+    --// ACCENT
+    local ACCENT = Color3.fromRGB(0, 170, 255)
+    local ACCENT_DARK = Color3.fromRGB(0, 120, 200)
+    local BG_MAIN   = Color3.fromRGB(10, 10, 12)
+    local BG_PANEL  = Color3.fromRGB(16, 16, 20)
+    local BG_CARD   = Color3.fromRGB(22, 22, 28)
+    local BG_ITEM   = Color3.fromRGB(28, 28, 36)
+    local TEXT_DIM  = Color3.fromRGB(140, 140, 160)
 
-    local Main = Instance.new("Frame", ScreenGui)
-    Main.Size = UDim2.new(0, 620, 0, 420)
-    Main.Position = UDim2.new(0.5, -310, 0.5, -210)
-    Main.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-    Main.ClipsDescendants = true
-    Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
-    local MainStroke = Instance.new("UIStroke", Main)
-    MainStroke.Color = _G.DH_Config.Accent
-    MainStroke.Thickness = 1.5
-    MainStroke.Transparency = 0.2
-
-    local Header = Instance.new("Frame", Main)
-    Header.Size = UDim2.new(1, 0, 0, 50)
-    Header.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-    Header.BorderSizePixel = 0
-    Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 12)
-    local HeaderFix = Instance.new("Frame", Header)
-    HeaderFix.Size = UDim2.new(1, 0, 0, 10)
-    HeaderFix.Position = UDim2.new(0, 0, 1, -10)
-    HeaderFix.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-    HeaderFix.BorderSizePixel = 0
-
-    local Title = Instance.new("TextLabel", Header)
-    Title.Size = UDim2.new(0, 350, 1, 0)
-    Title.Position = UDim2.new(0, 15, 0, 0)
-    Title.Text = "💎 DIAMOND<font color='#00AAFF'>HUB</font> <font color='#666'>| RIVALS</font>"
-    Title.RichText = true
-    Title.TextColor3 = Color3.new(1,1,1)
-    Title.Font = Enum.Font.GothamBold
-    Title.TextSize = 22
-    Title.TextXAlignment = "Left"
-    Title.BackgroundTransparency = 1
-
-    local CloseBtn = Instance.new("TextButton", Header)
-    CloseBtn.Size = UDim2.new(0, 36, 0, 36)
-    CloseBtn.Position = UDim2.new(1, -45, 0, 7)
-    CloseBtn.Text = "✖"
-    CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
-    CloseBtn.TextColor3 = Color3.new(1,1,1)
-    CloseBtn.TextSize = 18
-    Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 8)
-    CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy(); getgenv().DiamondHub_Loaded = false end)
-
-    local ContentFrame = Instance.new("Frame", Main)
-    ContentFrame.Size = UDim2.new(1, 0, 1, -50)
-    ContentFrame.Position = UDim2.new(0, 0, 0, 50)
-    ContentFrame.BackgroundTransparency = 1
-
-    local Sidebar = Instance.new("Frame", ContentFrame)
-    Sidebar.Size = UDim2.new(0, 160, 1, 0)
-    Sidebar.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    Sidebar.BorderSizePixel = 0
-    local TabList = Instance.new("UIListLayout", Sidebar)
-    TabList.Padding = UDim.new(0, 10)
-    TabList.HorizontalAlignment = "Center"
-    Instance.new("UIPadding", Sidebar).PaddingTop = UDim.new(0, 15)
-
-    local Pages = Instance.new("Frame", ContentFrame)
-    Pages.Size = UDim2.new(1, -170, 1, 0)
-    Pages.Position = UDim2.new(0, 160, 0, 0)
-    Pages.BackgroundTransparency = 1
-
-    local Tabs = {}
-    local function CreateTab(name, active)
-        local Frame = Instance.new("ScrollingFrame", Pages)
-        Frame.Size = UDim2.new(1, -10, 1, -20)
-        Frame.Position = UDim2.new(0, 5, 0, 10)
-        Frame.BackgroundTransparency = 1
-        Frame.Visible = active
-        Frame.ScrollBarThickness = 2
-        local Layout = Instance.new("UIListLayout", Frame)
-        Layout.Padding = UDim.new(0, 12)
-        Layout.HorizontalAlignment = "Center"
-
-        local Btn = Instance.new("TextButton", Sidebar)
-        Btn.Size = UDim2.new(0.85, 0, 0, 42)
-        Btn.BackgroundColor3 = active and _G.DH_Config.Accent or Color3.fromRGB(25, 25, 25)
-        Btn.Text = name
-        Btn.TextColor3 = active and Color3.new(1,1,1) or Color3.fromRGB(170, 170, 170)
-        Btn.Font = Enum.Font.GothamBold
-        Btn.TextSize = 16
-        Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 8)
-
-        Btn.MouseButton1Click:Connect(function()
-            for _, v in pairs(Tabs) do v.F.Visible = false; v.B.BackgroundColor3 = Color3.fromRGB(25, 25, 25); v.B.TextColor3 = Color3.fromRGB(170, 170, 170) end
-            Frame.Visible = true; Btn.BackgroundColor3 = _G.DH_Config.Accent; Btn.TextColor3 = Color3.new(1,1,1)
-        end)
-        Tabs[name] = {F = Frame, B = Btn}
-        return Frame
+    --// GUI ROOT
+    local function GetGui()
+        if gethui then return gethui() end
+        local cg = game:GetService("CoreGui")
+        if cg:FindFirstChild("RobloxGui") then return cg.RobloxGui end
+        return LocalPlayer:WaitForChild("PlayerGui")
     end
 
-    local DiscordTab = CreateTab("💬 Discord", true)
-    local CombatTab = CreateTab("⚔️ Combat", false)
-    local VisualsTab = CreateTab("👁️ Visuals", false)
-
-    -- Discord elements
-    local DiscLabel = Instance.new("TextLabel", DiscordTab)
-    DiscLabel.Size = UDim2.new(1, -20, 0, 40)
-    DiscLabel.BackgroundTransparency = 1
-    DiscLabel.Text = "Join the Official Support Server"
-    DiscLabel.TextColor3 = Color3.new(1,1,1)
-    DiscLabel.Font = Enum.Font.GothamBold
-    DiscLabel.TextSize = 18
-
-    local DiscBox = Instance.new("TextBox", DiscordTab)
-    DiscBox.Size = UDim2.new(1, -40, 0, 45)
-    DiscBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    DiscBox.Text = "https://discord.gg/diamondhub"
-    DiscBox.TextColor3 = _G.DH_Config.Accent
-    DiscBox.Font = Enum.Font.GothamMedium
-    DiscBox.TextSize = 16
-    DiscBox.ClearTextOnFocus = false
-    DiscBox.TextEditable = false
-    Instance.new("UICorner", DiscBox).CornerRadius = UDim.new(0, 8)
-
-    -- Toggle System
-    local function AddToggle(name, parent, key)
-        local T = Instance.new("TextButton", parent)
-        T.Size = UDim2.new(1, -20, 0, 50)
-        T.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-        T.Text = "      " .. name
-        T.TextColor3 = Color3.fromRGB(220, 220, 220)
-        T.Font = Enum.Font.GothamMedium
-        T.TextSize = 16
-        T.TextXAlignment = "Left"
-        Instance.new("UICorner", T).CornerRadius = UDim.new(0, 8)
-
-        local Pill = Instance.new("Frame", T)
-        Pill.Size = UDim2.new(0, 46, 0, 24)
-        Pill.Position = UDim2.new(1, -60, 0.5, -12)
-        Pill.BackgroundColor3 = _G.DH_Config[key] and _G.DH_Config.Accent or Color3.fromRGB(50, 50, 50)
-        Instance.new("UICorner", Pill).CornerRadius = UDim.new(1, 0)
-
-        local Dot = Instance.new("Frame", Pill)
-        Dot.Size = UDim2.new(0, 18, 0, 18)
-        Dot.Position = _G.DH_Config[key] and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
-        Dot.BackgroundColor3 = Color3.new(1,1,1)
-        Instance.new("UICorner", Dot).CornerRadius = UDim.new(1, 0)
-
-        T.MouseButton1Click:Connect(function()
-            _G.DH_Config[key] = not _G.DH_Config[key]
-            TweenService:Create(Pill, TweenInfo.new(0.3), {BackgroundColor3 = _G.DH_Config[key] and _G.DH_Config.Accent or Color3.fromRGB(50, 50, 50)}):Play()
-            TweenService:Create(Dot, TweenInfo.new(0.3, Enum.EasingStyle.Back), {Position = _G.DH_Config[key] and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)}):Play()
-        end)
-    end
-
-    AddToggle("Aimbot (Hard Lock)", CombatTab, "Aimbot")
-    AddToggle("Hitbox Expander", CombatTab, "RageHitbox")
-    AddToggle("ESP Highlights", VisualsTab, "ESP")
-
-    -- Engine Logic
-    RunService.RenderStepped:Connect(function()
-        if not getgenv().DiamondHub_Loaded then return end
-        if _G.DH_Config.Aimbot and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-            local nearest, dist = nil, _G.DH_Config.FOV
-            for _, p in pairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") and p.Character.Humanoid.Health > 0 then
-                    local pos, onScreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
-                    if onScreen then
-                        local mag = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
-                        if mag < dist then dist = mag; nearest = p.Character.Head end
-                    end
-                end
+    -- Full cleanup on re-execution
+    if getgenv().DiamondHub_Loaded then
+        local old = GetGui():FindFirstChild("DiamondHub_V2")
+        if old then old:Destroy() end
+        -- Disconnect all stored connections from previous run
+        if getgenv().DiamondHub_Connections then
+            for _, conn in pairs(getgenv().DiamondHub_Connections) do
+                pcall(function() conn:Disconnect() end)
             end
-            if nearest then Camera.CFrame = CFrame.new(Camera.CFrame.Position, nearest.Position) end
+        end
+        -- Signal any running coroutines to stop
+        getgenv().DiamondHub_Active = false
+        task.wait(0.05)
+    end
+    getgenv().DiamondHub_Loaded = true
+    getgenv().DiamondHub_Active = true
+    getgenv().DiamondHub_Connections = {}
+
+    local ScreenGui = Instance.new("ScreenGui", GetGui())
+    ScreenGui.Name = "DiamondHub_V2"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+    --// ============================================================
+    --//  HELPERS
+    --// ============================================================
+
+    local function MakeCorner(parent, radius)
+        local c = Instance.new("UICorner", parent)
+        c.CornerRadius = UDim.new(0, radius or 10)
+        return c
+    end
+
+    local function MakeStroke(parent, color, thickness, transparency)
+        local s = Instance.new("UIStroke", parent)
+        s.Color = color or ACCENT
+        s.Thickness = thickness or 1
+        s.Transparency = transparency or 0.6
+        return s
+    end
+
+    local function MakeLabel(parent, props)
+        local l = Instance.new("TextLabel", parent)
+        l.BackgroundTransparency = 1
+        l.Font = props.Font or Enum.Font.GothamBold
+        l.TextColor3 = props.TextColor3 or Color3.new(1,1,1)
+        l.TextSize = props.TextSize or 16
+        l.Text = props.Text or ""
+        l.Size = props.Size or UDim2.new(1,0,0,30)
+        l.Position = props.Position or UDim2.new(0,0,0,0)
+        l.TextXAlignment = props.TextXAlignment or Enum.TextXAlignment.Center
+        l.TextWrapped = props.TextWrapped or false
+        l.RichText = props.RichText or false
+        return l
+    end
+
+    local function MakeButton(parent, props)
+        local b = Instance.new("TextButton", parent)
+        b.BackgroundColor3 = props.BackgroundColor3 or ACCENT
+        b.TextColor3 = props.TextColor3 or Color3.new(1,1,1)
+        b.Font = props.Font or Enum.Font.GothamBold
+        b.TextSize = props.TextSize or 16
+        b.Text = props.Text or ""
+        b.Size = props.Size or UDim2.new(1,0,0,40)
+        b.Position = props.Position or UDim2.new(0,0,0,0)
+        b.AutoButtonColor = false
+        b.BorderSizePixel = 0
+        if props.Radius ~= false then MakeCorner(b, props.Radius or 10) end
+        return b
+    end
+
+    local function MakeFrame(parent, props)
+        local f = Instance.new("Frame", parent)
+        f.BackgroundColor3 = props.BackgroundColor3 or BG_MAIN
+        f.BorderSizePixel = 0
+        f.Size = props.Size or UDim2.new(1,0,1,0)
+        f.Position = props.Position or UDim2.new(0,0,0,0)
+        if props.Radius then MakeCorner(f, props.Radius) end
+        if props.Transparency then f.BackgroundTransparency = props.Transparency end
+        return f
+    end
+
+    local function Tween(obj, t, props, style, dir)
+        local info = TweenInfo.new(t, style or Enum.EasingStyle.Quart, dir or Enum.EasingDirection.Out)
+        local tw = TweenService:Create(obj, info, props)
+        tw:Play()
+        return tw
+    end
+
+    --// ============================================================
+    --//  SCREEN 1 — LOADING SPLASH
+    --// ============================================================
+
+    local LoadingFrame = MakeFrame(ScreenGui, {BackgroundColor3 = BG_MAIN})
+    LoadingFrame.Size = UDim2.new(1,0,1,0)
+    LoadingFrame.ZIndex = 100
+
+    -- Centered content container
+    local LoadCenter = MakeFrame(LoadingFrame, {BackgroundColor3 = Color3.new(0,0,0), Transparency = 1})
+    LoadCenter.Size = UDim2.new(0, 420, 0, 220)
+    LoadCenter.Position = UDim2.new(0.5, -210, 0.5, -110)
+
+    -- Diamond logo
+    local DiamondIcon = MakeLabel(LoadCenter, {
+        Text = "💎",
+        TextSize = 64,
+        Size = UDim2.new(1,0,0,80),
+        Position = UDim2.new(0,0,0,0),
+    })
+
+    -- Title
+    local LoadTitle = MakeLabel(LoadCenter, {
+        Text = "DIAMOND HUB",
+        TextSize = 30,
+        Font = Enum.Font.GothamBlack,
+        TextColor3 = Color3.new(1,1,1),
+        Size = UDim2.new(1,0,0,40),
+        Position = UDim2.new(0,0,0,82),
+        RichText = true,
+    })
+
+    -- Subtitle animated dots
+    local LoadSub = MakeLabel(LoadCenter, {
+        Text = "Loading",
+        TextSize = 15,
+        Font = Enum.Font.GothamMedium,
+        TextColor3 = TEXT_DIM,
+        Size = UDim2.new(1,0,0,24),
+        Position = UDim2.new(0,0,0,122),
+    })
+
+    -- Progress bar background
+    local ProgressBG = MakeFrame(LoadCenter, {
+        BackgroundColor3 = Color3.fromRGB(30,30,40),
+        Size = UDim2.new(1,0,0,4),
+        Position = UDim2.new(0,0,0,162),
+        Radius = 4,
+    })
+
+    local ProgressFill = MakeFrame(ProgressBG, {
+        BackgroundColor3 = ACCENT,
+        Size = UDim2.new(0,0,1,0),
+        Radius = 4,
+    })
+
+    -- Signature
+    MakeLabel(LoadCenter, {
+        Text = "v2.0 Hub Edition",
+        TextSize = 12,
+        Font = Enum.Font.Gotham,
+        TextColor3 = Color3.fromRGB(60,60,80),
+        Size = UDim2.new(1,0,0,20),
+        Position = UDim2.new(0,0,0,190),
+    })
+
+    -- Animate icon: fade in + gentle pulse, size stays fixed so text is never clipped
+    DiamondIcon.TextTransparency = 1
+    Tween(DiamondIcon, 0.6, {TextTransparency = 0}, Enum.EasingStyle.Quad)
+    task.spawn(function()
+        task.wait(0.1)
+        Tween(DiamondIcon, 0.45, {TextSize = 72}, Enum.EasingStyle.Sine)
+        task.wait(0.45)
+        Tween(DiamondIcon, 0.4, {TextSize = 64}, Enum.EasingStyle.Sine)
+    end)
+
+    LoadTitle.TextTransparency = 1
+    task.delay(0.3, function() Tween(LoadTitle, 0.5, {TextTransparency = 0}) end)
+
+    LoadSub.TextTransparency = 1
+    task.delay(0.5, function() Tween(LoadSub, 0.4, {TextTransparency = 0}) end)
+
+    -- Animate dots (stops when hub is no longer active)
+    local dotCount = 0
+    task.spawn(function()
+        while getgenv().DiamondHub_Active and LoadingFrame.Parent do
+            dotCount = (dotCount % 3) + 1
+            LoadSub.Text = "Loading" .. string.rep(".", dotCount)
+            task.wait(0.4)
         end
     end)
-    
-    -- Pop up animation
-    Main.Size = UDim2.new(0, 0, 0, 0)
-    TweenService:Create(Main, TweenInfo.new(0.5, Enum.EasingStyle.Back), {Size = UDim2.new(0, 620, 0, 420)}):Play()
-end
 
---=========================================--
---      PHASE 2: GAME SELECTION HUB        --
---=========================================--
-local function LoadHubMenu()
-    local HubMain = Instance.new("Frame", ScreenGui)
-    HubMain.Size = UDim2.new(0, 500, 0, 350)
-    HubMain.Position = UDim2.new(0.5, -250, 0.5, -175)
-    HubMain.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    HubMain.ClipsDescendants = true
-    Instance.new("UICorner", HubMain).CornerRadius = UDim.new(0, 10)
-    Instance.new("UIStroke", HubMain).Color = Color3.fromRGB(0, 170, 255)
+    -- Progress bar tween over 2 seconds
+    ProgressBG.BackgroundTransparency = 1
+    task.delay(0.5, function()
+        Tween(ProgressBG, 0.2, {BackgroundTransparency = 0})
+        Tween(ProgressFill, 2.0, {Size = UDim2.new(1,0,1,0)}, Enum.EasingStyle.Quart)
+    end)
 
-    local Title = Instance.new("TextLabel", HubMain)
-    Title.Size = UDim2.new(1, 0, 0, 60)
-    Title.Text = "💎 DIAMOND<font color='#00AAFF'>HUB</font> | GAME SELECTION"
-    Title.RichText = true
-    Title.TextColor3 = Color3.new(1,1,1)
-    Title.Font = Enum.Font.GothamBold
-    Title.TextSize = 20
-    Title.BackgroundTransparency = 1
+    --// ============================================================
+    --//  SCREEN 2 — GAME SELECTOR HUB
+    --// ============================================================
 
-    -- Games List
-    local GameList = Instance.new("ScrollingFrame", HubMain)
-    GameList.Size = UDim2.new(1, -40, 1, -80)
-    GameList.Position = UDim2.new(0, 20, 0, 60)
-    GameList.BackgroundTransparency = 1
-    GameList.ScrollBarThickness = 2
-    local GL = Instance.new("UIListLayout", GameList)
-    GL.Padding = UDim.new(0, 10)
+    local HubFrame = MakeFrame(ScreenGui, {BackgroundColor3 = BG_MAIN})
+    HubFrame.Size = UDim2.new(0, 540, 0, 380)
+    HubFrame.Position = UDim2.new(0.5, -270, 0.5, -190)
+    HubFrame.Visible = false
+    HubFrame.ZIndex = 10
+    MakeCorner(HubFrame, 14)
+    MakeStroke(HubFrame, ACCENT, 1.5, 0.3)
 
-    local function CreateGameCard(gameName, description, isSupported)
-        local Card = Instance.new("TextButton", GameList)
-        Card.Size = UDim2.new(1, -10, 0, 70)
-        Card.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-        Card.Text = ""
-        Instance.new("UICorner", Card).CornerRadius = UDim.new(0, 8)
+    -- Hub header
+    local HubHeader = MakeFrame(HubFrame, {BackgroundColor3 = BG_PANEL})
+    HubHeader.Size = UDim2.new(1,0,0,56)
+    MakeCorner(HubHeader, 14)
+    -- Fix header bottom corners
+    local HubHeaderFix = MakeFrame(HubHeader, {BackgroundColor3 = BG_PANEL})
+    HubHeaderFix.Size = UDim2.new(1,0,0,14)
+    HubHeaderFix.Position = UDim2.new(0,0,1,-14)
 
-        local Name = Instance.new("TextLabel", Card)
-        Name.Size = UDim2.new(1, -20, 0, 35)
-        Name.Position = UDim2.new(0, 15, 0, 5)
-        Name.Text = gameName
-        Name.TextColor3 = Color3.new(1,1,1)
-        Name.Font = Enum.Font.GothamBold
-        Name.TextSize = 18
-        Name.TextXAlignment = "Left"
-        Name.BackgroundTransparency = 1
+    -- Accent line under header
+    local HubAccentLine = MakeFrame(HubFrame, {BackgroundColor3 = ACCENT})
+    HubAccentLine.Size = UDim2.new(1,0,0,2)
+    HubAccentLine.Position = UDim2.new(0,0,0,56)
 
-        local Desc = Instance.new("TextLabel", Card)
-        Desc.Size = UDim2.new(1, -20, 0, 20)
-        Desc.Position = UDim2.new(0, 15, 0, 40)
-        Desc.Text = description
-        Desc.TextColor3 = Color3.fromRGB(150, 150, 150)
-        Desc.Font = Enum.Font.Gotham
-        Desc.TextSize = 14
-        Desc.TextXAlignment = "Left"
-        Desc.BackgroundTransparency = 1
+    -- Hub title
+    local HubTitleLbl = MakeLabel(HubHeader, {
+        Text = "💎  DIAMOND HUB",
+        TextSize = 20,
+        Font = Enum.Font.GothamBlack,
+        TextColor3 = Color3.new(1,1,1),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-110,1,0),
+        Position = UDim2.new(0,18,0,0),
+    })
 
-        if not isSupported then
-            Card.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-            Name.TextColor3 = Color3.fromRGB(100, 100, 100)
-            Desc.Text = "Coming Soon..."
-        end
+    local HubSubLbl = MakeLabel(HubHeader, {
+        Text = "Script Hub",
+        TextSize = 12,
+        Font = Enum.Font.Gotham,
+        TextColor3 = TEXT_DIM,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,0,0,14),
+        Position = UDim2.new(0,45,0,34),
+    })
 
+    -- Hub close button
+    local HubCloseBtn = MakeButton(HubFrame, {
+        Text = "✕",
+        BackgroundColor3 = Color3.fromRGB(200,50,60),
+        Size = UDim2.new(0,32,0,32),
+        Position = UDim2.new(1,-46,0,12),
+        Radius = 8,
+        TextSize = 15,
+    })
+
+    -- Hub body
+    local HubBody = MakeFrame(HubFrame, {Transparency = 1})
+    HubBody.Size = UDim2.new(1,-24,1,-80)
+    HubBody.Position = UDim2.new(0,12,0,68)
+
+    -- Section label
+    local GamesLabel = MakeLabel(HubBody, {
+        Text = "SELECT A GAME",
+        TextSize = 11,
+        Font = Enum.Font.GothamBold,
+        TextColor3 = TEXT_DIM,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,0,0,18),
+        Position = UDim2.new(0,4,0,0),
+    })
+
+    -- Scrolling list for games
+    local GamesScroll = Instance.new("ScrollingFrame", HubBody)
+    GamesScroll.Size = UDim2.new(1,0,1,-26)
+    GamesScroll.Position = UDim2.new(0,0,0,26)
+    GamesScroll.BackgroundTransparency = 1
+    GamesScroll.ScrollBarThickness = 3
+    GamesScroll.ScrollBarImageColor3 = ACCENT
+    GamesScroll.CanvasSize = UDim2.new(0,0,0,0)
+    GamesScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+    local GamesLayout = Instance.new("UIListLayout", GamesScroll)
+    GamesLayout.Padding = UDim.new(0,10)
+    GamesLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    GamesLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+    Instance.new("UIPadding", GamesScroll).PaddingTop = UDim.new(0,4)
+
+    --// Game Card Builder
+    local GameCards = {}
+    local function AddGameCard(name, subtitle, emoji, onLaunch)
+        local Card = MakeFrame(GamesScroll, {BackgroundColor3 = BG_CARD, Radius = 12})
+        Card.Size = UDim2.new(1,-4,0,78)
+        MakeStroke(Card, Color3.fromRGB(50,50,70), 1, 0.4)
+
+        local EmojiLbl = MakeLabel(Card, {
+            Text = emoji,
+            TextSize = 32,
+            Size = UDim2.new(0,60,1,0),
+            Position = UDim2.new(0,14,0,0),
+        })
+
+        local NameLbl = MakeLabel(Card, {
+            Text = name,
+            TextSize = 18,
+            Font = Enum.Font.GothamBold,
+            TextColor3 = Color3.new(1,1,1),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Size = UDim2.new(1,-170,0,26),
+            Position = UDim2.new(0,76,0,14),
+        })
+
+        local SubLbl = MakeLabel(Card, {
+            Text = subtitle,
+            TextSize = 12,
+            Font = Enum.Font.Gotham,
+            TextColor3 = TEXT_DIM,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Size = UDim2.new(1,-170,0,18),
+            Position = UDim2.new(0,76,0,40),
+        })
+
+        local LaunchBtn = MakeButton(Card, {
+            Text = "LAUNCH",
+            BackgroundColor3 = ACCENT,
+            Size = UDim2.new(0,96,0,36),
+            Position = UDim2.new(1,-110,0.5,-18),
+            TextSize = 13,
+            Font = Enum.Font.GothamBold,
+            Radius = 8,
+        })
+        MakeStroke(LaunchBtn, Color3.fromRGB(100,210,255), 1, 0.5)
+
+        -- Hover effect
+        LaunchBtn.MouseEnter:Connect(function()
+            Tween(LaunchBtn, 0.15, {BackgroundColor3 = Color3.fromRGB(30,190,255)})
+        end)
+        LaunchBtn.MouseLeave:Connect(function()
+            Tween(LaunchBtn, 0.15, {BackgroundColor3 = ACCENT})
+        end)
+        LaunchBtn.MouseButton1Click:Connect(function()
+            onLaunch()
+        end)
+
+        -- Card hover glow
+        Card.MouseEnter:Connect(function()
+            Tween(Card, 0.15, {BackgroundColor3 = Color3.fromRGB(28,28,40)})
+        end)
+        Card.MouseLeave:Connect(function()
+            Tween(Card, 0.15, {BackgroundColor3 = BG_CARD})
+        end)
+
+        table.insert(GameCards, Card)
         return Card
     end
 
-    local RivalsBtn = CreateGameCard("🔫 Rivals", "Aimbot, Hitbox Expander, ESP", true)
-    CreateGameCard("🧱 Arsenal", "Coming Soon...", false)
-    CreateGameCard("💸 Da Hood", "Coming Soon...", false)
-
-    -- Loading text when clicking a game
-    local LoadingLabel = Instance.new("TextLabel", HubMain)
-    LoadingLabel.Size = UDim2.new(1, 0, 1, 0)
-    LoadingLabel.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-    LoadingLabel.Text = "Loading Rivals..."
-    LoadingLabel.TextColor3 = Color3.fromRGB(0, 170, 255)
-    LoadingLabel.Font = Enum.Font.GothamBold
-    LoadingLabel.TextSize = 24
-    LoadingLabel.Visible = false
-    LoadingLabel.ZIndex = 50
-
-    RivalsBtn.MouseButton1Click:Connect(function()
-        LoadingLabel.Visible = true
-        LoadingLabel.BackgroundTransparency = 1
-        LoadingLabel.TextTransparency = 1
-        TweenService:Create(LoadingLabel, TweenInfo.new(0.5), {BackgroundTransparency = 0, TextTransparency = 0}):Play()
-        
-        task.wait(1.5) -- Fake loading time
-        HubMain:Destroy()
-        LoadRivalsScript()
+    --// Hub drag
+    local dhDragging, dhDragStart, dhStartPos
+    HubHeader.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            dhDragging = true; dhDragStart = i.Position; dhStartPos = HubFrame.Position
+        end
     end)
-    
-    HubMain.Size = UDim2.new(0,0,0,0)
-    TweenService:Create(HubMain, TweenInfo.new(0.6, Enum.EasingStyle.Back), {Size = UDim2.new(0, 500, 0, 350)}):Play()
-end
+    table.insert(getgenv().DiamondHub_Connections, UserInputService.InputChanged:Connect(function(i)
+        if dhDragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+            local d = i.Position - dhDragStart
+            HubFrame.Position = UDim2.new(dhStartPos.X.Scale, dhStartPos.X.Offset+d.X, dhStartPos.Y.Scale, dhStartPos.Y.Offset+d.Y)
+        end
+    end))
+    table.insert(getgenv().DiamondHub_Connections, UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then dhDragging = false end
+    end))
 
---=========================================--
---      PHASE 1: BOOT LOADING SCREEN       --
---=========================================--
-local BootFrame = Instance.new("Frame", ScreenGui)
-BootFrame.Size = UDim2.new(1, 0, 1, 0)
-BootFrame.BackgroundColor3 = Color3.fromRGB(5, 5, 5)
-BootFrame.ZIndex = 100
+    HubCloseBtn.MouseButton1Click:Connect(function()
+        Tween(HubFrame, 0.25, {BackgroundTransparency = 1})
+        task.wait(0.25)
+        HubFrame.Visible = false
+        getgenv().DiamondHub_Active = false
+        getgenv().DiamondHub_Loaded = false
+        ScreenGui:Destroy()
+    end)
 
-local DiamondText = Instance.new("TextLabel", BootFrame)
-DiamondText.Size = UDim2.new(1, 0, 1, 0)
-DiamondText.BackgroundTransparency = 1
-DiamondText.Text = "Loading Diamond Hub..."
-DiamondText.TextColor3 = Color3.new(1,1,1)
-DiamondText.Font = Enum.Font.GothamBold
-DiamondText.TextSize = 30
+    --// ============================================================
+    --//  SCREEN 3 — GAME LOADING TRANSITION OVERLAY
+    --// ============================================================
 
--- Simple fade out animation
-task.spawn(function()
-    task.wait(1.5)
-    TweenService:Create(DiamondText, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
-    TweenService:Create(BootFrame, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
-    task.wait(0.5)
-    BootFrame:Destroy()
-    LoadHubMenu()
+    local GameLoadFrame = MakeFrame(ScreenGui, {BackgroundColor3 = BG_MAIN})
+    GameLoadFrame.Size = UDim2.new(0,360,0,180)
+    GameLoadFrame.Position = UDim2.new(0.5,-180,0.5,-90)
+    GameLoadFrame.Visible = false
+    GameLoadFrame.ZIndex = 50
+    MakeCorner(GameLoadFrame, 16)
+    MakeStroke(GameLoadFrame, ACCENT, 1.5, 0.3)
+
+    -- Spinner (rotating line)
+    local SpinnerRing = MakeFrame(GameLoadFrame, {Transparency = 1})
+    SpinnerRing.Size = UDim2.new(0,56,0,56)
+    SpinnerRing.Position = UDim2.new(0.5,-28,0,28)
+
+    -- Spinner visual: arc using UIStroke on a frame
+    local SpinArc = Instance.new("Frame", SpinnerRing)
+    SpinArc.Size = UDim2.new(1,0,1,0)
+    SpinArc.BackgroundTransparency = 1
+    local spinStroke = Instance.new("UIStroke", SpinArc)
+    spinStroke.Color = ACCENT
+    spinStroke.Thickness = 4
+    spinStroke.Transparency = 0
+    MakeCorner(SpinArc, 28)
+
+    -- Inner fill to make arc look like a ring
+    local SpinInner = MakeFrame(SpinnerRing, {BackgroundColor3 = BG_MAIN})
+    SpinInner.Size = UDim2.new(1,-12,1,-12)
+    SpinInner.Position = UDim2.new(0,6,0,6)
+    MakeCorner(SpinInner, 22)
+
+    local SpinDot = MakeFrame(SpinnerRing, {BackgroundColor3 = ACCENT, Radius = 5})
+    SpinDot.Size = UDim2.new(0,10,0,10)
+    SpinDot.Position = UDim2.new(0.5,-5,0,-5)
+
+    local GameLoadTitle = MakeLabel(GameLoadFrame, {
+        Text = "Loading...",
+        TextSize = 22,
+        Font = Enum.Font.GothamBold,
+        TextColor3 = Color3.new(1,1,1),
+        Size = UDim2.new(1,-20,0,30),
+        Position = UDim2.new(0,10,0,96),
+    })
+
+    local GameLoadSub = MakeLabel(GameLoadFrame, {
+        Text = "Please wait",
+        TextSize = 13,
+        Font = Enum.Font.Gotham,
+        TextColor3 = TEXT_DIM,
+        Size = UDim2.new(1,-20,0,20),
+        Position = UDim2.new(0,10,0,128),
+    })
+
+    local GameLoadBar_BG = MakeFrame(GameLoadFrame, {BackgroundColor3 = Color3.fromRGB(30,30,40), Radius = 4})
+    GameLoadBar_BG.Size = UDim2.new(1,-40,0,4)
+    GameLoadBar_BG.Position = UDim2.new(0,20,0,154)
+
+    local GameLoadBar_Fill = MakeFrame(GameLoadBar_BG, {BackgroundColor3 = ACCENT, Radius = 4})
+    GameLoadBar_Fill.Size = UDim2.new(0,0,1,0)
+
+    -- Spinner rotation (stops when hub is no longer active)
+    task.spawn(function()
+        local angle = 0
+        while getgenv().DiamondHub_Active do
+            if GameLoadFrame.Visible then
+                angle = angle + 6
+                SpinDot.Position = UDim2.new(
+                    0.5 + math.sin(math.rad(angle))*0.5 - 0.08,
+                    0,
+                    0.5 - math.cos(math.rad(angle))*0.5 - 0.08,
+                    0
+                )
+            end
+            task.wait(1/60)
+        end
+    end)
+
+    --// ============================================================
+    --//  SCREEN 4 — RIVALS CHEAT UI (Redesigned)
+    --// ============================================================
+
+    _G.DH_Config = {
+        Aimbot        = false,
+        RageHitbox    = false,
+        HitboxSize    = 15,
+        FOV           = 250,
+        ESP           = false,
+        Speed         = false,
+        WalkSpeedValue= 60,
+        Fly           = false,
+        FlySpeed      = 50,
+        Noclip        = false,
+    }
+
+    local RivalsFrame = MakeFrame(ScreenGui, {BackgroundColor3 = BG_MAIN})
+    RivalsFrame.Size = UDim2.new(0, 660, 0, 440)
+    RivalsFrame.Position = UDim2.new(0.5,-330,0.5,-220)
+    RivalsFrame.Visible = false
+    RivalsFrame.ZIndex = 10
+    RivalsFrame.ClipsDescendants = true
+    MakeCorner(RivalsFrame, 14)
+    MakeStroke(RivalsFrame, ACCENT, 1.5, 0.25)
+
+    --// Rivals Header
+    local RivalsHeader = MakeFrame(RivalsFrame, {BackgroundColor3 = BG_PANEL})
+    RivalsHeader.Size = UDim2.new(1,0,0,56)
+    MakeCorner(RivalsHeader, 14)
+    local RivalsHeaderFix = MakeFrame(RivalsHeader, {BackgroundColor3 = BG_PANEL})
+    RivalsHeaderFix.Size = UDim2.new(1,0,0,14)
+    RivalsHeaderFix.Position = UDim2.new(0,0,1,-14)
+
+    local RivalsAccentLine = MakeFrame(RivalsFrame, {BackgroundColor3 = ACCENT})
+    RivalsAccentLine.Size = UDim2.new(1,0,0,2)
+    RivalsAccentLine.Position = UDim2.new(0,0,0,56)
+
+    -- Title
+    MakeLabel(RivalsHeader, {
+        Text = "💎  DIAMOND HUB  ›  Rivals",
+        TextSize = 18,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-160,1,0),
+        Position = UDim2.new(0,18,0,0),
+    })
+
+    -- Back button
+    local BackBtn = MakeButton(RivalsHeader, {
+        Text = "← Hub",
+        BackgroundColor3 = BG_ITEM,
+        TextColor3 = Color3.fromRGB(180,180,200),
+        Size = UDim2.new(0,70,0,32),
+        Position = UDim2.new(1,-168,0,12),
+        TextSize = 13,
+        Font = Enum.Font.GothamBold,
+        Radius = 8,
+    })
+    MakeStroke(BackBtn, Color3.fromRGB(60,60,90), 1, 0.3)
+    BackBtn.MouseEnter:Connect(function() Tween(BackBtn, 0.15, {BackgroundColor3 = Color3.fromRGB(38,38,50)}) end)
+    BackBtn.MouseLeave:Connect(function() Tween(BackBtn, 0.15, {BackgroundColor3 = BG_ITEM}) end)
+
+    -- Minimize
+    local MinBtn = MakeButton(RivalsHeader, {
+        Text = "—",
+        BackgroundColor3 = BG_ITEM,
+        Size = UDim2.new(0,32,0,32),
+        Position = UDim2.new(1,-124,0,12),
+        TextSize = 16,
+        Radius = 8,
+    })
+    MakeStroke(MinBtn, Color3.fromRGB(60,60,90), 1, 0.4)
+
+    -- Close
+    local CloseBtn = MakeButton(RivalsHeader, {
+        Text = "✕",
+        BackgroundColor3 = Color3.fromRGB(200,50,60),
+        Size = UDim2.new(0,32,0,32),
+        Position = UDim2.new(1,-80,0,12),
+        TextSize = 15,
+        Radius = 8,
+    })
+
+    -- Rivals dragging
+    local rDragging, rDragStart, rStartPos
+    RivalsHeader.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            rDragging = true; rDragStart = i.Position; rStartPos = RivalsFrame.Position
+        end
+    end)
+    table.insert(getgenv().DiamondHub_Connections, UserInputService.InputChanged:Connect(function(i)
+        if rDragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+            local d = i.Position - rDragStart
+            RivalsFrame.Position = UDim2.new(rStartPos.X.Scale, rStartPos.X.Offset+d.X, rStartPos.Y.Scale, rStartPos.Y.Offset+d.Y)
+        end
+    end))
+    table.insert(getgenv().DiamondHub_Connections, UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then rDragging = false end
+    end))
+
+    --// Rivals Content
+    local RivalsContent = MakeFrame(RivalsFrame, {Transparency = 1})
+    RivalsContent.Size = UDim2.new(1,0,1,-60)
+    RivalsContent.Position = UDim2.new(0,0,0,60)
+
+    --// Sidebar
+    local Sidebar = MakeFrame(RivalsContent, {BackgroundColor3 = BG_PANEL})
+    Sidebar.Size = UDim2.new(0,168,1,0)
+
+    local SidebarLayout = Instance.new("UIListLayout", Sidebar)
+    SidebarLayout.Padding = UDim.new(0,6)
+    SidebarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    SidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    Instance.new("UIPadding", Sidebar).PaddingTop = UDim.new(0,14)
+
+    -- Sidebar divider
+    local SideDiv = MakeFrame(RivalsContent, {BackgroundColor3 = Color3.fromRGB(35,35,50)})
+    SideDiv.Size = UDim2.new(0,1,1,0)
+    SideDiv.Position = UDim2.new(0,168,0,0)
+
+    --// Pages
+    local Pages = MakeFrame(RivalsContent, {Transparency = 1})
+    Pages.Size = UDim2.new(1,-180,1,0)
+    Pages.Position = UDim2.new(0,176,0,0)
+
+    local RivalsTabs = {}
+    local function CreateTab(name, icon, layoutOrder, active)
+        -- Page
+        local Frame = Instance.new("ScrollingFrame", Pages)
+        Frame.Size = UDim2.new(1,-6,1,-16)
+        Frame.Position = UDim2.new(0,3,0,8)
+        Frame.BackgroundTransparency = 1
+        Frame.Visible = active
+        Frame.ScrollBarThickness = 3
+        Frame.ScrollBarImageColor3 = ACCENT
+        Frame.CanvasSize = UDim2.new(0,0,0,0)
+        Frame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        local Layout = Instance.new("UIListLayout", Frame)
+        Layout.Padding = UDim.new(0,10)
+        Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        Instance.new("UIPadding", Frame).PaddingTop = UDim.new(0,6)
+
+        -- Sidebar button
+        local Btn = Instance.new("TextButton", Sidebar)
+        Btn.LayoutOrder = layoutOrder
+        Btn.Size = UDim2.new(1,-16,0,40)
+        Btn.BackgroundColor3 = active and ACCENT or BG_ITEM
+        Btn.TextColor3 = active and Color3.new(1,1,1) or TEXT_DIM
+        Btn.Font = Enum.Font.GothamBold
+        Btn.TextSize = 14
+        Btn.Text = icon .. "  " .. name
+        Btn.TextXAlignment = Enum.TextXAlignment.Left
+        Btn.AutoButtonColor = false
+        Btn.BorderSizePixel = 0
+        MakeCorner(Btn, 8)
+        if active then
+            local lPad = Instance.new("UIPadding", Btn)
+            lPad.PaddingLeft = UDim.new(0,12)
+        else
+            local lPad = Instance.new("UIPadding", Btn)
+            lPad.PaddingLeft = UDim.new(0,12)
+        end
+
+        if active then MakeStroke(Btn, ACCENT, 1, 0.5) end
+
+        Btn.MouseEnter:Connect(function()
+            if not (RivalsTabs[name] and RivalsTabs[name].F.Visible) then
+                Tween(Btn, 0.15, {BackgroundColor3 = Color3.fromRGB(32,32,44)})
+            end
+        end)
+        Btn.MouseLeave:Connect(function()
+            if not (RivalsTabs[name] and RivalsTabs[name].F.Visible) then
+                Tween(Btn, 0.15, {BackgroundColor3 = BG_ITEM})
+            end
+        end)
+
+        Btn.MouseButton1Click:Connect(function()
+            for n, v in pairs(RivalsTabs) do
+                v.F.Visible = false
+                Tween(v.B, 0.15, {BackgroundColor3 = BG_ITEM, TextColor3 = TEXT_DIM})
+                for _, s in pairs(v.B:GetChildren()) do
+                    if s:IsA("UIStroke") then s:Destroy() end
+                end
+            end
+            Frame.Visible = true
+            Tween(Btn, 0.15, {BackgroundColor3 = ACCENT, TextColor3 = Color3.new(1,1,1)})
+            MakeStroke(Btn, ACCENT, 1, 0.5)
+        end)
+
+        RivalsTabs[name] = {F = Frame, B = Btn}
+        return Frame
+    end
+
+    local HomeTab    = CreateTab("Home",      "🏠", 1, true)
+    local CombatTab  = CreateTab("Combat",    "⚔️", 2, false)
+    local VisualsTab = CreateTab("Visuals",   "👁", 3, false)
+    local MoveTab    = CreateTab("Movement",  "⚡", 4, false)
+    local ProfileTab = CreateTab("Profile",   "👤", 5, false)
+    local DiscordTab = CreateTab("Discord",   "💬", 6, false)
+
+    --// SECTION HEADER
+    local function SectionHeader(parent, text)
+        local lbl = MakeLabel(parent, {
+            Text = text,
+            TextSize = 11,
+            Font = Enum.Font.GothamBold,
+            TextColor3 = TEXT_DIM,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Size = UDim2.new(1,-8,0,20),
+        })
+        return lbl
+    end
+
+    --// TOGGLE
+    local function AddToggle(parent, label, key)
+        local Row = MakeFrame(parent, {BackgroundColor3 = BG_CARD, Radius = 10})
+        Row.Size = UDim2.new(1,-8,0,54)
+
+        local Lbl = MakeLabel(Row, {
+            Text = label,
+            TextSize = 15,
+            Font = Enum.Font.GothamMedium,
+            TextColor3 = Color3.fromRGB(220,220,235),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Size = UDim2.new(1,-80,1,0),
+            Position = UDim2.new(0,16,0,0),
+        })
+
+        local PillBG = MakeFrame(Row, {
+            BackgroundColor3 = _G.DH_Config[key] and ACCENT or Color3.fromRGB(45,45,60),
+            Radius = 100,
+        })
+        PillBG.Size = UDim2.new(0,48,0,26)
+        PillBG.Position = UDim2.new(1,-64,0.5,-13)
+
+        local Dot = MakeFrame(PillBG, {BackgroundColor3 = Color3.new(1,1,1), Radius = 100})
+        Dot.Size = UDim2.new(0,20,0,20)
+        Dot.Position = _G.DH_Config[key] and UDim2.new(1,-23,0.5,-10) or UDim2.new(0,3,0.5,-10)
+
+        local function Refresh()
+            local on = _G.DH_Config[key]
+            Tween(PillBG, 0.25, {BackgroundColor3 = on and ACCENT or Color3.fromRGB(45,45,60)}, Enum.EasingStyle.Quad)
+            Tween(Dot, 0.25, {Position = on and UDim2.new(1,-23,0.5,-10) or UDim2.new(0,3,0.5,-10)}, Enum.EasingStyle.Back)
+        end
+
+        Row.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                _G.DH_Config[key] = not _G.DH_Config[key]
+                Refresh()
+            end
+        end)
+        Row.MouseEnter:Connect(function() Tween(Row, 0.12, {BackgroundColor3 = Color3.fromRGB(30,30,42)}) end)
+        Row.MouseLeave:Connect(function() Tween(Row, 0.12, {BackgroundColor3 = BG_CARD}) end)
+
+        return Row
+    end
+
+    --// HOME TAB
+    local HomeBanner = MakeFrame(HomeTab, {BackgroundColor3 = BG_CARD, Radius = 12})
+    HomeBanner.Size = UDim2.new(1,-8,0,90)
+    MakeStroke(HomeBanner, ACCENT, 1, 0.5)
+
+    MakeLabel(HomeBanner, {
+        Text = "💎  DIAMOND HUB",
+        TextSize = 22,
+        Font = Enum.Font.GothamBlack,
+        TextColor3 = Color3.new(1,1,1),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-20,0,30),
+        Position = UDim2.new(0,16,0,14),
+    })
+    MakeLabel(HomeBanner, {
+        Text = "Rivals — Hub Edition  v2.0",
+        TextSize = 13,
+        Font = Enum.Font.Gotham,
+        TextColor3 = TEXT_DIM,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-20,0,20),
+        Position = UDim2.new(0,16,0,46),
+    })
+
+    local StatusDot = MakeFrame(HomeBanner, {BackgroundColor3 = Color3.fromRGB(50,220,100), Radius = 100})
+    StatusDot.Size = UDim2.new(0,10,0,10)
+    StatusDot.Position = UDim2.new(0,16,0,70)
+
+    MakeLabel(HomeBanner, {
+        Text = "All systems active",
+        TextSize = 12,
+        Font = Enum.Font.Gotham,
+        TextColor3 = Color3.fromRGB(50,220,100),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-40,0,16),
+        Position = UDim2.new(0,32,0,67),
+    })
+
+    -- Quick toggles on home
+    SectionHeader(HomeTab, "QUICK TOGGLES")
+    AddToggle(HomeTab, "Aimbot (Hard Lock)", "Aimbot")
+    AddToggle(HomeTab, "Speed Bypass", "Speed")
+    AddToggle(HomeTab, "ESP Highlights", "ESP")
+
+    --// COMBAT TAB
+    SectionHeader(CombatTab, "COMBAT")
+    AddToggle(CombatTab, "Aimbot (Hard Lock)", "Aimbot")
+    AddToggle(CombatTab, "Hitbox Expander", "RageHitbox")
+
+    --// VISUALS TAB
+    SectionHeader(VisualsTab, "VISUALS")
+    AddToggle(VisualsTab, "ESP Highlights", "ESP")
+
+    --// MOVEMENT TAB
+    SectionHeader(MoveTab, "MOVEMENT")
+    AddToggle(MoveTab, "Speed Bypass", "Speed")
+    AddToggle(MoveTab, "Fly Hack (WASD)", "Fly")
+    AddToggle(MoveTab, "Noclip", "Noclip")
+
+    --// PROFILE TAB
+    local PCard = MakeFrame(ProfileTab, {BackgroundColor3 = BG_CARD, Radius = 12})
+    PCard.Size = UDim2.new(1,-8,0,120)
+
+    local PImg = Instance.new("ImageLabel", PCard)
+    PImg.Size = UDim2.new(0,72,0,72)
+    PImg.Position = UDim2.new(0,16,0.5,-36)
+    PImg.BackgroundColor3 = BG_ITEM
+    PImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=150&h=150"
+    MakeCorner(PImg, 36)
+    MakeStroke(PImg, ACCENT, 2, 0.4)
+
+    MakeLabel(PCard, {
+        Text = LocalPlayer.DisplayName,
+        TextSize = 18,
+        Font = Enum.Font.GothamBold,
+        TextColor3 = Color3.new(1,1,1),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-110,0,24),
+        Position = UDim2.new(0,102,0,22),
+    })
+    MakeLabel(PCard, {
+        Text = "@" .. LocalPlayer.Name,
+        TextSize = 13,
+        Font = Enum.Font.Gotham,
+        TextColor3 = TEXT_DIM,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-110,0,18),
+        Position = UDim2.new(0,102,0,48),
+    })
+    MakeLabel(PCard, {
+        Text = "ID: " .. LocalPlayer.UserId .. "  •  Age: " .. LocalPlayer.AccountAge .. " days",
+        TextSize = 12,
+        Font = Enum.Font.Gotham,
+        TextColor3 = TEXT_DIM,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-110,0,16),
+        Position = UDim2.new(0,102,0,72),
+    })
+
+    --// DISCORD TAB
+    local DiscCard = MakeFrame(DiscordTab, {BackgroundColor3 = BG_CARD, Radius = 12})
+    DiscCard.Size = UDim2.new(1,-8,0,130)
+    MakeStroke(DiscCard, Color3.fromRGB(88,101,242), 1.5, 0.3)
+
+    MakeLabel(DiscCard, {
+        Text = "💬  Official Support Server",
+        TextSize = 16,
+        Font = Enum.Font.GothamBold,
+        TextColor3 = Color3.new(1,1,1),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-20,0,24),
+        Position = UDim2.new(0,14,0,12),
+    })
+    MakeLabel(DiscCard, {
+        Text = "Join for updates, support, and more scripts.",
+        TextSize = 13,
+        Font = Enum.Font.Gotham,
+        TextColor3 = TEXT_DIM,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-20,0,20),
+        Position = UDim2.new(0,14,0,36),
+    })
+
+    local DiscLinkBox = Instance.new("TextBox", DiscCard)
+    DiscLinkBox.Size = UDim2.new(1,-20,0,36)
+    DiscLinkBox.Position = UDim2.new(0,10,0,62)
+    DiscLinkBox.BackgroundColor3 = BG_ITEM
+    DiscLinkBox.Text = "https://discord.gg/placeholder"
+    DiscLinkBox.TextColor3 = ACCENT
+    DiscLinkBox.Font = Enum.Font.GothamMedium
+    DiscLinkBox.TextSize = 14
+    DiscLinkBox.ClearTextOnFocus = false
+    DiscLinkBox.TextEditable = false
+    DiscLinkBox.TextXAlignment = Enum.TextXAlignment.Left
+    MakeCorner(DiscLinkBox, 8)
+    local lPad = Instance.new("UIPadding", DiscLinkBox)
+    lPad.PaddingLeft = UDim.new(0,10)
+
+    local CopyBtn = MakeButton(DiscordTab, {
+        Text = "Copy Invite Link",
+        BackgroundColor3 = Color3.fromRGB(88,101,242),
+        Size = UDim2.new(1,-8,0,40),
+        TextSize = 15,
+        Radius = 10,
+    })
+    CopyBtn.MouseButton1Click:Connect(function()
+        if setclipboard then setclipboard(DiscLinkBox.Text) end
+        CopyBtn.Text = "✓ Copied!"
+        task.wait(2)
+        CopyBtn.Text = "Copy Invite Link"
+    end)
+
+    --// CLOSE & MINIMIZE HANDLERS
+    local RivalsMinimized = false
+    MinBtn.MouseButton1Click:Connect(function()
+        RivalsMinimized = not RivalsMinimized
+        if RivalsMinimized then
+            RivalsContent.Visible = false
+            Tween(RivalsFrame, 0.3, {Size = UDim2.new(0,660,0,60)}, Enum.EasingStyle.Quart)
+        else
+            Tween(RivalsFrame, 0.3, {Size = UDim2.new(0,660,0,440)}, Enum.EasingStyle.Quart)
+            task.wait(0.25)
+            RivalsContent.Visible = true
+        end
+    end)
+
+    -- Confirm Exit popup
+    local ExitOverlay = MakeFrame(RivalsFrame, {BackgroundColor3 = Color3.new(0,0,0), Transparency = 1})
+    ExitOverlay.Size = UDim2.new(1,0,1,0)
+    ExitOverlay.ZIndex = 200
+    ExitOverlay.Visible = false
+
+    local ExitBox = MakeFrame(ExitOverlay, {BackgroundColor3 = BG_PANEL, Radius = 12})
+    ExitBox.Size = UDim2.new(0,300,0,150)
+    ExitBox.Position = UDim2.new(0.5,-150,0.5,-75)
+    ExitBox.ZIndex = 201
+    MakeStroke(ExitBox, Color3.fromRGB(60,60,80), 1, 0.3)
+
+    MakeLabel(ExitBox, {
+        Text = "Close Diamond Hub?",
+        TextSize = 18,
+        Font = Enum.Font.GothamBold,
+        Size = UDim2.new(1,0,0,60),
+        Position = UDim2.new(0,0,0,10),
+    }).ZIndex = 202
+
+    local ExitYes = MakeButton(ExitBox, {
+        Text = "Close",
+        BackgroundColor3 = Color3.fromRGB(200,50,60),
+        Size = UDim2.new(0,110,0,38),
+        Position = UDim2.new(0,16,0,80),
+        TextSize = 15,
+    })
+    ExitYes.ZIndex = 202
+
+    local ExitNo = MakeButton(ExitBox, {
+        Text = "Cancel",
+        BackgroundColor3 = BG_ITEM,
+        Size = UDim2.new(0,110,0,38),
+        Position = UDim2.new(1,-126,0,80),
+        TextSize = 15,
+    })
+    ExitNo.ZIndex = 202
+
+    CloseBtn.MouseButton1Click:Connect(function()
+        ExitOverlay.Visible = true
+        Tween(ExitOverlay, 0.2, {BackgroundTransparency = 0.5})
+    end)
+    ExitNo.MouseButton1Click:Connect(function()
+        Tween(ExitOverlay, 0.15, {BackgroundTransparency = 1})
+        task.wait(0.15)
+        ExitOverlay.Visible = false
+    end)
+    ExitYes.MouseButton1Click:Connect(function()
+        getgenv().DiamondHub_Active = false
+        getgenv().DiamondHub_Loaded = false
+        ScreenGui:Destroy()
+    end)
+
+    --// ============================================================
+    --//  GAME ENGINE (Aimbot, Movement, ESP, Noclip)
+    --// ============================================================
+
+    local function GetNearest()
+        local nearest, dist = nil, _G.DH_Config.FOV
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character then
+                local head = p.Character:FindFirstChild("Head")
+                if head and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
+                    local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                    if onScreen then
+                        local mag = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                        if mag < dist then dist = mag; nearest = head end
+                    end
+                end
+            end
+        end
+        return nearest
+    end
+
+    table.insert(getgenv().DiamondHub_Connections, RunService.RenderStepped:Connect(function()
+        if not getgenv().DiamondHub_Active then return end
+        if not RivalsFrame.Visible then return end
+
+        if _G.DH_Config.Aimbot and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+            local t = GetNearest()
+            if t then Camera.CFrame = CFrame.new(Camera.CFrame.Position, t.Position) end
+        end
+
+        local char = LocalPlayer.Character
+        if char then
+            local hum = char:FindFirstChild("Humanoid")
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if hum then
+                hum.WalkSpeed = _G.DH_Config.Speed and _G.DH_Config.WalkSpeedValue or 16
+            end
+            if root and _G.DH_Config.Fly then
+                root.Velocity = Vector3.new(0, 2, 0)
+                local move = Vector3.zero
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += Camera.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= Camera.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= Camera.CFrame.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += Camera.CFrame.RightVector end
+                root.CFrame = root.CFrame + (move * (_G.DH_Config.FlySpeed / 15))
+            end
+        end
+
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character then
+                local head = p.Character:FindFirstChild("Head")
+                if head then
+                    head.Size = _G.DH_Config.RageHitbox and Vector3.new(_G.DH_Config.HitboxSize,_G.DH_Config.HitboxSize,_G.DH_Config.HitboxSize) or Vector3.new(1.2,1.2,1.2)
+                    head.Transparency = _G.DH_Config.RageHitbox and 0.8 or 0
+                    head.CanCollide = not _G.DH_Config.RageHitbox
+
+                    local h = p.Character:FindFirstChild("DH_High") or Instance.new("Highlight", p.Character)
+                    h.Name = "DH_High"
+                    h.Enabled = _G.DH_Config.ESP
+                    h.FillColor = ACCENT
+                end
+            end
+        end
+    end))
+
+    table.insert(getgenv().DiamondHub_Connections, RunService.Stepped:Connect(function()
+        if not getgenv().DiamondHub_Active then return end
+        if _G.DH_Config.Noclip and LocalPlayer.Character then
+            for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+                if v:IsA("BasePart") then v.CanCollide = false end
+            end
+        end
+    end))
+
+    --// ============================================================
+    --//  NAV FUNCTIONS
+    --// ============================================================
+
+    local function ShowRivals()
+        HubFrame.Visible = false
+        GameLoadFrame.Visible = true
+
+        GameLoadTitle.Text = "Loading Rivals"
+        GameLoadSub.Text = "Initializing scripts..."
+        GameLoadBar_Fill.Size = UDim2.new(0,0,1,0)
+        Tween(GameLoadBar_Fill, 1.4, {Size = UDim2.new(1,0,1,0)}, Enum.EasingStyle.Quart)
+
+        task.wait(1.6)
+        if not getgenv().DiamondHub_Active then return end
+
+        GameLoadFrame.Visible = false
+
+        -- Reset minimize state so Rivals always opens fully expanded
+        RivalsMinimized = false
+        RivalsFrame.Size = UDim2.new(0,660,0,440)
+        RivalsContent.Visible = true
+
+        RivalsFrame.Visible = true
+        RivalsFrame.BackgroundTransparency = 1
+        Tween(RivalsFrame, 0.35, {BackgroundTransparency = 0}, Enum.EasingStyle.Quad)
+    end
+
+    local function ShowHub()
+        RivalsFrame.Visible = false
+        HubFrame.Visible = true
+        HubFrame.BackgroundTransparency = 1
+        Tween(HubFrame, 0.3, {BackgroundTransparency = 0}, Enum.EasingStyle.Quad)
+    end
+
+    BackBtn.MouseButton1Click:Connect(ShowHub)
+
+    --// Register games
+    AddGameCard("Rivals", "Combat sports — PvP scripts", "⚔️", function()
+        ShowRivals()
+    end)
+
+    --// More games placeholder card (visual only)
+    local MoreCard = MakeFrame(GamesScroll, {BackgroundColor3 = Color3.fromRGB(18,18,24), Radius = 12})
+    MoreCard.Size = UDim2.new(1,-4,0,56)
+    MakeStroke(MoreCard, Color3.fromRGB(40,40,60), 1, 0.3)
+
+    MakeLabel(MoreCard, {
+        Text = "More games coming soon...",
+        TextSize = 14,
+        Font = Enum.Font.GothamMedium,
+        TextColor3 = Color3.fromRGB(80,80,100),
+        Size = UDim2.new(1,0,1,0),
+    })
+
+    --// ============================================================
+    --//  STARTUP SEQUENCE: Loading → Hub
+    --// ============================================================
+
+    task.spawn(function()
+        task.wait(2.4)
+        if not getgenv().DiamondHub_Active then return end
+
+        -- Fade out loading
+        Tween(LoadingFrame, 0.4, {BackgroundTransparency = 1})
+        for _, child in pairs(LoadingFrame:GetDescendants()) do
+            if child:IsA("TextLabel") then
+                Tween(child, 0.3, {TextTransparency = 1})
+            elseif child:IsA("Frame") then
+                Tween(child, 0.3, {BackgroundTransparency = 1})
+            end
+        end
+        task.wait(0.45)
+        if not getgenv().DiamondHub_Active then return end
+        LoadingFrame.Visible = false
+
+        -- Show hub with fade-in
+        HubFrame.Visible = true
+        HubFrame.BackgroundTransparency = 1
+        Tween(HubFrame, 0.4, {BackgroundTransparency = 0}, Enum.EasingStyle.Quad)
+    end)
+
 end)
+
+if not success then
+    warn("DiamondHub Error: " .. tostring(err))
+end
