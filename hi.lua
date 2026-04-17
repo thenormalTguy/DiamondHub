@@ -2259,9 +2259,12 @@ local success, err = pcall(function()
         end
     end
     local function BF_SetPlatformStand(on)
+        -- Kept as a no-op for safety — calling Humanoid.PlatformStand=true
+        -- ragdolls the avatar and is flagged by BF anti-cheat / automod.
+        -- Movement now relies on tween + noclip only.
         local char = LocalPlayer.Character
         local hum  = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then pcall(function() hum.PlatformStand = on and true or false end) end
+        if hum then pcall(function() hum.PlatformStand = false end) end
     end
 
     local function BF_StopTween()
@@ -2283,10 +2286,17 @@ local success, err = pcall(function()
             return
         end
         if BF_CurTween then pcall(function() BF_CurTween:Cancel() end); BF_CurTween = nil end
-        BF_SetPlatformStand(true)
+        -- NOTE: We intentionally do NOT use PlatformStand any more. It puts
+        -- the Humanoid in a ragdoll pose which BF's anti-cheat (and server
+        -- automod) flags instantly. A plain tween at sane walking/sprint
+        -- speed reads to the server like normal movement.
         BF_SetNoclip(true)
         local dist = (hrp.Position - targetPos).Magnitude
-        local time = math.clamp(dist / (speed or 250), 0.05, 8)
+        -- Cap speed at human-believable values (defaults to ~80 studs/s ≈ a
+        -- modest sprint). Minimum tween time bumped to 0.3s so we never
+        -- *snap* to a position even when right next to it.
+        local sp   = math.min(speed or 80, 120)
+        local time = math.clamp(dist / sp, 0.3, 12)
         local info = TweenInfo.new(time, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
         BF_CurTween    = TweenService:Create(hrp, info, {CFrame = CFrame.new(targetPos)})
         BF_TweenTarget = targetPos
@@ -2294,10 +2304,17 @@ local success, err = pcall(function()
     end
 
     -- Combat lock: tween onto the mob continuously (short hops keep us in range
-    -- as the mob moves). Absolute position offset, never rotated.
+    -- as the mob moves). Approach from a small offset (not directly on top)
+    -- and at walking speed so the server doesn't see a teleport.
     local function BF_TeleportTo(root)
         if not root or not root.Parent then return end
-        BF_TweenTo(root.Position + Vector3.new(0, 4, 0), 400)
+        local char = LocalPlayer.Character
+        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        local dir  = (hrp.Position - root.Position)
+        if dir.Magnitude < 0.1 then dir = Vector3.new(1, 0, 0) end
+        local off  = dir.Unit * 6 + Vector3.new(0, 2, 0)
+        BF_TweenTo(root.Position + off, 80)
     end
 
     -- Equip weapon by ToolTip (BF tools set ToolTip = "Melee", "Sword", or "Blox Fruit")
@@ -2482,7 +2499,7 @@ local success, err = pcall(function()
         -- Priority 2: island destination → tween to landing pad
         if BF_Destination then
             local landPos = BF_Destination.Position + Vector3.new(0, 8, 0)
-            BF_TweenTo(landPos, 250)
+            BF_TweenTo(landPos, 120)
             return
         end
 
