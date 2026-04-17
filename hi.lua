@@ -1301,6 +1301,24 @@ local success, err = pcall(function()
         AutoStats_Fruit   = false,
         ESP               = false,
         FruitNotifier     = false,
+        -- Auto Buy toggles (each fires its corresponding CommF_ remote ~3s)
+        AutoBuy_TrueTripleKatana = false,
+        AutoBuy_CursedDualKatana = false,
+        AutoBuy_Tushita          = false,
+        AutoBuy_Yama             = false,
+        AutoBuy_Saber            = false,
+        AutoBuy_SoulCane         = false,
+        AutoBuy_BuddySword       = false,
+        AutoBuy_BlackLeg         = false,
+        AutoBuy_Electric         = false,
+        AutoBuy_DragonClaw       = false,
+        AutoBuy_DarkStep         = false,
+        AutoBuy_DeathStep        = false,
+        AutoBuy_Superhuman       = false,
+        AutoBuy_SharkmanKarate   = false,
+        AutoBuy_ElectricClaw     = false,
+        AutoBuy_DragonTalon      = false,
+        AutoBuy_Godhuman         = false,
     }
 
     -- Sea detection via PlaceId
@@ -1824,6 +1842,27 @@ local success, err = pcall(function()
         "Leviathan (Sea Boss)",
     }, "SelectedBoss")
 
+    BF_SecLabel(BF_MainTab, "AUTO BUY — SWORDS")
+    BFToggle(BF_MainTab, "True Triple Katana", "Combines Saddi, Wando, Shisui (need all 3)", "AutoBuy_TrueTripleKatana")
+    BFToggle(BF_MainTab, "Cursed Dual Katana", "Buys CDK from Cursed Ship NPC",              "AutoBuy_CursedDualKatana")
+    BFToggle(BF_MainTab, "Tushita",            "Claims Tushita using God's Chalice",          "AutoBuy_Tushita")
+    BFToggle(BF_MainTab, "Yama",               "Combines CDK + Tushita into Yama",            "AutoBuy_Yama")
+    BFToggle(BF_MainTab, "Saber",              "Buys Saber from Saber Expert (850K Beli)",    "AutoBuy_Saber")
+    BFToggle(BF_MainTab, "Soul Cane",          "Buys Soul Cane (1.85M Beli)",                 "AutoBuy_SoulCane")
+    BFToggle(BF_MainTab, "Buddy Sword",        "Buys Buddy Sword (5M Beli)",                  "AutoBuy_BuddySword")
+
+    BF_SecLabel(BF_MainTab, "AUTO BUY — FIGHTING STYLES")
+    BFToggle(BF_MainTab, "Black Leg",          "Buys Black Leg (1.5K Beli)",                  "AutoBuy_BlackLeg")
+    BFToggle(BF_MainTab, "Electric",           "Buys Electric (500K Beli)",                   "AutoBuy_Electric")
+    BFToggle(BF_MainTab, "Dragon Claw",        "Claims Dragon Claw via NPC quest",            "AutoBuy_DragonClaw")
+    BFToggle(BF_MainTab, "Dark Step",          "Buys Dark Step (250K Beli)",                  "AutoBuy_DarkStep")
+    BFToggle(BF_MainTab, "Death Step",         "Upgrades Black Leg → Death Step (Bones)",     "AutoBuy_DeathStep")
+    BFToggle(BF_MainTab, "Superhuman",         "Combines BL + Electric + DC + Sharkman (3M)", "AutoBuy_Superhuman")
+    BFToggle(BF_MainTab, "Sharkman Karate",    "Buys Sharkman Karate (5M Beli, all stages)",  "AutoBuy_SharkmanKarate")
+    BFToggle(BF_MainTab, "Electric Claw",      "Combines Electric + Sharkman + Dragon Claw",  "AutoBuy_ElectricClaw")
+    BFToggle(BF_MainTab, "Dragon Talon",       "Claims Dragon Talon (Hidden NPC quest)",      "AutoBuy_DragonTalon")
+    BFToggle(BF_MainTab, "Godhuman",           "Combines Superhuman + Death Step + Talon + EC", "AutoBuy_Godhuman")
+
     --// ─── MASTERY TAB ──────────────────────────────────────────────
 
     BF_SecLabel(BF_MasteryTab, "AUTO FARM MASTERY")
@@ -2104,11 +2143,26 @@ local success, err = pcall(function()
     local BF_GoToCooldown = 0
     local BF_CurTarget    = nil
     local BF_Destination  = nil
+    local BF_LastLanded   = nil   -- last destination CFrame we successfully landed at
     local function BF_GoTo(cf)
         if not cf then return end
         if tick() < BF_GoToCooldown then return end
+        -- Same-destination suppression: if we just landed at this exact spot
+        -- and the player hasn't moved far from it, don't re-fly. Only allow
+        -- the re-fly once the character is far enough from the last landing
+        -- pad that the round-trip is meaningful.
+        if BF_LastLanded then
+            local char = LocalPlayer.Character
+            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+            local sameSpot = (cf.Position - BF_LastLanded.Position).Magnitude < 30
+            local stillThere = hrp and (hrp.Position - BF_LastLanded.Position).Magnitude < 60
+            if sameSpot and stillThere then
+                BF_GoToCooldown = tick() + 3   -- back off, try again in 3s
+                return
+            end
+        end
         BF_GoToCooldown = tick() + 12   -- 12s: plenty of flight time to reach any island
-        BF_Destination = cf
+        BF_Destination  = cf
     end
 
     -- Find a boss anywhere in workspace (bosses spawn outside Enemies sometimes)
@@ -2286,47 +2340,153 @@ local success, err = pcall(function()
         end
     end))
 
-    -- Movement loop (every frame):
-    --   • When a combat target is locked → stick on top of it (instant, short range)
-    --   • When flying to an island       → smooth lerp at 250 studs/s, noclip while moving
+    -- Movement loop (every frame). Three responsibilities:
+    --   1. Combat target locked → stick on top of it
+    --   2. Flying to an island   → 3-phase: climb to cruise altitude → cruise
+    --      horizontally at 2000 Y → descend to landing pad. This keeps the
+    --      flight path well above the ocean and any island geometry, so the
+    --      character never dips into the water on long inter-sea flights.
+    --   3. Idle                  → ensure noclip is OFF and do nothing
+    --
+    -- Cruise altitude is computed when a flight begins as
+    --   max(startY + 1500, destY + 1500, 1500)
+    -- so a Sky-Island start (already high) climbs even higher rather than
+    -- descending into geometry, and a sea-level start still gets the full
+    -- 1500 stud safety margin above the water.
+    local CRUISE_MARGIN  = 1500  -- studs above start/dest
+    local FLIGHT_SPEED   = 250   -- studs/s
+    local BF_FlightCruiseY    = 1500
+    local BF_FlightLastDest   = nil
+    local BF_NoclipOn         = false
+    local BF_NoclipLastChar   = nil
+    local function setNoclip(char, on)
+        -- Guard: char must be a real Instance with GetDescendants
+        if typeof(char) ~= "Instance" then
+            BF_NoclipOn = false
+            BF_NoclipLastChar = nil
+            return
+        end
+        -- Re-apply when character changed (respawn) even if state unchanged
+        if BF_NoclipOn == on and BF_NoclipLastChar == char then return end
+        BF_NoclipOn = on
+        BF_NoclipLastChar = char
+        for _, p in pairs(char:GetDescendants()) do
+            if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+                p.CanCollide = not on
+            end
+        end
+    end
+
     table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
         if not getgenv().DiamondHub_Active then return end
         if not BFFrame.Visible then return end
 
         local char = LocalPlayer.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
+        if not hrp then setNoclip(char or {}, false); return end
 
         -- Priority 1: stick to combat target
         if BF_CurTarget and BF_CurTarget.Parent then
+            setNoclip(char, false)
             BF_TeleportTo(BF_CurTarget)
             return
         end
 
-        -- Priority 2: fly to island destination
+        -- Priority 2: fly to island destination using 3-phase path
         if BF_Destination then
-            -- Noclip all character parts so we don't catch on geometry mid-flight
-            for _, p in pairs(char:GetDescendants()) do
-                if p:IsA("BasePart") then p.CanCollide = false end
+            setNoclip(char, true)
+            local landPos = BF_Destination.Position + Vector3.new(0, 8, 0)
+            local cur     = hrp.Position
+
+            -- New flight? → compute cruise altitude relative to start AND dest
+            if BF_FlightLastDest ~= BF_Destination then
+                BF_FlightLastDest = BF_Destination
+                BF_FlightCruiseY  = math.max(cur.Y + CRUISE_MARGIN,
+                                              landPos.Y + CRUISE_MARGIN,
+                                              CRUISE_MARGIN)
+            end
+            local cruiseY = BF_FlightCruiseY
+            local horiz   = math.sqrt((cur.X - landPos.X)^2 + (cur.Z - landPos.Z)^2)
+
+            -- Arrived?
+            if (cur - landPos).Magnitude < 25 then
+                hrp.CFrame        = CFrame.new(landPos)
+                setNoclip(char, false)
+                BF_LastLanded     = BF_Destination   -- record landed pad for same-dest suppression
+                BF_Destination    = nil
+                BF_FlightLastDest = nil
+                BF_LastQuest      = nil              -- re-issue StartQuest now that we're at the island
+                BF_GoToCooldown   = tick() + 3       -- 3s settled grace: let mobs load before another fly
+                return
             end
 
-            local dest    = BF_Destination.Position + Vector3.new(0, 50, 0)  -- fly above island
-            local current = hrp.Position
-            local dir     = dest - current
-            local dist    = dir.Magnitude
-
-            if dist < 25 then
-                -- Arrived — land at island height, re-enable collision, clear destination
-                hrp.CFrame  = CFrame.new(BF_Destination.Position + Vector3.new(0, 8, 0))
-                for _, p in pairs(char:GetDescendants()) do
-                    if p:IsA("BasePart") then p.CanCollide = true end
-                end
-                BF_Destination   = nil
-                BF_GoToCooldown  = 0   -- allow an immediate scan on next tick
+            -- Pick waypoint based on phase
+            local wp
+            if cur.Y < cruiseY - 100 and horiz > 80 then
+                wp = Vector3.new(cur.X, cruiseY, cur.Z)              -- climb straight up
+            elseif horiz > 30 then
+                wp = Vector3.new(landPos.X, cruiseY, landPos.Z)      -- cruise at altitude
             else
-                -- Move at 250 studs/s toward the elevated waypoint
-                local step = math.min(250 * dt, dist)
-                hrp.CFrame = CFrame.new(current + dir.Unit * step)
+                wp = landPos                                         -- descend to landing pad
+            end
+
+            local dir  = wp - cur
+            local mag  = dir.Magnitude
+            if mag > 0.1 then
+                local step = math.min(FLIGHT_SPEED * dt, mag)
+                hrp.CFrame = CFrame.new(cur + dir.Unit * step)
+            end
+            return
+        end
+
+        -- Idle — make sure character collision is back to normal
+        setNoclip(char, false)
+    end))
+
+    --// ─── AUTO BUY ENGINE ─────────────────────────────────────────
+    -- Each entry maps a config key → list of {remoteName, args...} call tuples.
+    -- The buy loop fires every ~3s; each call is wrapped in pcall so a failure
+    -- on one item (e.g. unmet prerequisites) doesn't break the loop. The server
+    -- silently no-ops when reqs aren't met, so the toggle effectively waits
+    -- until the player has the requirements then auto-completes the purchase.
+    -- One canonical remote call per item. Server no-ops on unmet prereqs,
+    -- so toggles auto-complete the moment requirements are met.
+    local BF_BuyMap = {
+        -- ── Swords ──────────────────────────────────────────────
+        AutoBuy_TrueTripleKatana = { {"BuyTrueTripleKatana"} },
+        AutoBuy_CursedDualKatana = { {"BuyCursedDualKatana"} },
+        AutoBuy_Tushita          = { {"Tushita"} },
+        AutoBuy_Yama             = { {"Yama"} },
+        AutoBuy_Saber            = { {"Buy Sword", "Saber",      850000} },
+        AutoBuy_SoulCane         = { {"Buy Sword", "Soul Cane",  1850000} },
+        AutoBuy_BuddySword       = { {"Buy Sword", "Buddy Sword", 5000000} },
+
+        -- ── Fighting Styles ────────────────────────────────────
+        AutoBuy_BlackLeg       = { {"BlackLeg"} },
+        AutoBuy_Electric       = { {"Electro"} },
+        AutoBuy_DragonClaw     = { {"DragonClaw"} },
+        AutoBuy_DarkStep       = { {"DarkStep"} },
+        AutoBuy_DeathStep      = { {"DeathStep"} },
+        AutoBuy_Superhuman     = { {"Superhuman"} },
+        AutoBuy_SharkmanKarate = { {"SharkmanKarate"} },
+        AutoBuy_ElectricClaw   = { {"ElectricClaw"} },
+        AutoBuy_DragonTalon    = { {"DragonTalon"} },
+        AutoBuy_Godhuman       = { {"Godhuman"} },
+    }
+
+    local BF_BuyTimer = 0
+    table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
+        if not getgenv().DiamondHub_Active then return end
+        if not BFFrame.Visible then return end
+        BF_BuyTimer = BF_BuyTimer + dt
+        if BF_BuyTimer < 3 then return end
+        BF_BuyTimer = 0
+        if not BF_CommF then return end
+        for cfgKey, calls in pairs(BF_BuyMap) do
+            if _G.BF_Config[cfgKey] then
+                for _, args in ipairs(calls) do
+                    pcall(function() BF_CommF:InvokeServer(unpack(args)) end)
+                end
             end
         end
     end))
