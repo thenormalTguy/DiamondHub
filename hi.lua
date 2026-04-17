@@ -1828,7 +1828,7 @@ local success, err = pcall(function()
 
     BF_SecLabel(BF_MasteryTab, "AUTO FARM MASTERY")
     BFToggle(BF_MasteryTab, "Auto Farm Mastery", "Farms mastery using selected weapon", "AutoMastery")
-    BFDropdown(BF_MasteryTab, "Mastery Weapon", {"Melee", "Fruit", "Sword"}, "MasteryType")
+    BFDropdown(BF_MasteryTab, "Mastery Weapon", {"Melee", "Blox Fruit", "Sword"}, "MasteryType")
 
     BF_SecLabel(BF_MasteryTab, "AUTO ADD STATS")
     BFToggle(BF_MasteryTab, "Auto Add Melee Stats",   "Spends stat points into Melee",      "AutoStats_Melee")
@@ -1890,55 +1890,183 @@ local success, err = pcall(function()
 
     --// ─── BF ENGINE LOOPS ─────────────────────────────────────────
 
-    local function BF_FindTarget(nameList)
-        local nearest, bestDist = nil, math.huge
+    -- Real Blox Fruits remotes (CommF_ is the main game RemoteFunction)
+    local BF_Players = game:GetService("Players")
+    local BF_Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local BF_CommF   = BF_Remotes and BF_Remotes:FindFirstChild("CommF_")
+
+    -- Quest table: {questName, tier, minLv, maxLv, mobName, sea}
+    -- Standard public Blox Fruits quest progression (1st → 2nd → 3rd Sea)
+    local BF_Quests = {
+        {"BanditQuest1",        1,    1,    9, "Bandit",                1},
+        {"JungleQuest",         1,   10,   14, "Monkey",                1},
+        {"JungleQuest",         2,   15,   29, "Gorilla",               1},
+        {"BuggyQuest1",         1,   30,   39, "Pirate",                1},
+        {"BuggyQuest1",         2,   40,   59, "Brute",                 1},
+        {"DesertQuest",         1,   60,   74, "Desert Bandit",         1},
+        {"DesertQuest",         2,   75,   89, "Desert Officer",        1},
+        {"SnowQuest",           1,   90,   99, "Snow Bandit",           1},
+        {"SnowQuest",           2,  100,  119, "Snowman",               1},
+        {"MarineQuest2",        1,  120,  149, "Chief Petty Officer",   1},
+        {"SkyQuest",            1,  150,  174, "Sky Bandit",            1},
+        {"SkyQuest",            2,  175,  189, "Dark Master",           1},
+        {"PrisonerQuest",       1,  190,  209, "Prisoner",              1},
+        {"PrisonerQuest",       2,  210,  249, "Dangerous Prisoner",    1},
+        {"ColosseumQuest",      1,  250,  274, "Toga Warrior",          1},
+        {"ColosseumQuest",      2,  275,  299, "Gladiator",             1},
+        {"MagmaQuest",          1,  300,  324, "Military Soldier",      1},
+        {"MagmaQuest",          2,  325,  374, "Military Spy",          1},
+        {"FishmanQuest",        1,  375,  399, "Fishman Warrior",       1},
+        {"FishmanQuest",        2,  400,  449, "Fishman Commando",      1},
+        {"SkyExp1Quest",        1,  450,  474, "God's Guard",           1},
+        {"SkyExp1Quest",        2,  475,  524, "Shanda",                1},
+        {"SkyExp2Quest",        1,  525,  549, "Royal Squad",           1},
+        {"SkyExp2Quest",        2,  550,  624, "Royal Soldier",         1},
+        {"FountainQuest",       1,  625,  649, "Galley Pirate",         1},
+        {"FountainQuest",       2,  650,  699, "Galley Captain",        1},
+        -- Second Sea
+        {"Area1Quest",          1,  700,  724, "Raider",                2},
+        {"Area1Quest",          2,  725,  774, "Mercenary",             2},
+        {"Area2Quest",          1,  775,  824, "Swan Pirate",           2},
+        {"Area2Quest",          2,  825,  874, "Factory Staff",         2},
+        {"MarineQuest3",        1,  875,  899, "Marine Lieutenant",     2},
+        {"MarineQuest3",        2,  900,  949, "Marine Captain",        2},
+        {"ZombieQuest",         1,  950,  974, "Zombie",                2},
+        {"ZombieQuest",         2,  975,  999, "Vampire",               2},
+        {"SnowMountainQuest",   1, 1000, 1049, "Snow Trooper",          2},
+        {"SnowMountainQuest",   2, 1050, 1099, "Winter Warrior",        2},
+        {"IceSideQuest",        1, 1100, 1124, "Lab Subordinate",       2},
+        {"IceSideQuest",        2, 1125, 1174, "Horned Warrior",        2},
+        {"FireSideQuest",       1, 1175, 1199, "Magma Ninja",           2},
+        {"FireSideQuest",       2, 1200, 1249, "Lava Pirate",           2},
+        {"ZQuest",              1, 1250, 1274, "Ship Deckhand",         2},
+        {"ZQuest",              2, 1275, 1299, "Ship Engineer",         2},
+        {"GraveyardQuest",      1, 1300, 1324, "Zombie",                2},
+        {"GraveyardQuest",      2, 1325, 1349, "Vampire",               2},
+        {"PiratePortQuest",     1, 1350, 1424, "Pirate Millionaire",    2},
+        {"PiratePortQuest",     2, 1425, 1499, "Toxic Pirate",          2},
+        -- Third Sea
+        {"AmazonQuest",         1, 1500, 1574, "Dragon Crew Warrior",   3},
+        {"AmazonQuest",         2, 1575, 1624, "Dragon Crew Archer",    3},
+        {"MarineTreeIsland",    1, 1625, 1699, "Marine Commodore",      3},
+        {"MarineTreeIsland",    2, 1700, 1724, "Marine Rear Admiral",   3},
+        {"DeepForestIsland",    1, 1725, 1774, "Fishman Raider",        3},
+        {"DeepForestIsland",    2, 1775, 1824, "Fishman Captain",       3},
+        {"DeepForestIsland3",   1, 1825, 1899, "Forest Pirate",         3},
+        {"DeepForestIsland3",   2, 1900, 1999, "Mythological Pirate",   3},
+        {"HauntedQuest1",       1, 2000, 2049, "Jungle Pirate",         3},
+        {"HauntedQuest1",       2, 2050, 2074, "Musketeer Pirate",      3},
+        {"HauntedQuest2",       1, 2075, 2124, "Reborn Skeleton",       3},
+        {"HauntedQuest2",       2, 2125, 2199, "Living Zombie",         3},
+        {"IceCreamIslandQuest", 1, 2200, 2249, "Head Cake Soldier",     3},
+        {"IceCreamIslandQuest", 2, 2250, 2274, "Cookie Crafter",        3},
+        {"CakeQuest1",          1, 2275, 2299, "Cake Soldier",          3},
+        {"CakeQuest1",          2, 2300, 2324, "Cake Guard",            3},
+        {"CakeQuest2",          1, 2325, 2349, "Baking Staff",          3},
+        {"CakeQuest2",          2, 2350, 2399, "Head Baker",            3},
+        {"ChocQuest",           1, 2400, 2424, "Cocoa Warrior",         3},
+        {"ChocQuest",           2, 2425, 2449, "Chocolate Bar Battler", 3},
+        {"ChocQuest",           3, 2450, 9999, "Sweet Thief",           3},
+    }
+
+    local function BF_PlayerLevel()
+        local data = LocalPlayer:FindFirstChild("Data")
+        local lvl  = data and data:FindFirstChild("Level")
+        return (lvl and lvl.Value) or 0
+    end
+
+    local function BF_QuestForLevel(lv)
+        for _, q in ipairs(BF_Quests) do
+            if lv >= q[3] and lv <= q[4] then return q end
+        end
+        return BF_Quests[#BF_Quests]
+    end
+
+    local BF_LastQuest = nil
+    local function BF_StartQuest(questName, tier)
+        local key = questName .. "_" .. tostring(tier)
+        if BF_LastQuest == key then return end
+        if BF_CommF then
+            local ok = pcall(function() BF_CommF:InvokeServer("StartQuest", questName, tier) end)
+            if ok then BF_LastQuest = key end
+        end
+    end
+
+    -- Find nearest enemy in workspace.Enemies (the BF mob container)
+    local function BF_FindEnemy(mobName)
+        local enemies = workspace:FindFirstChild("Enemies")
+        if not enemies then return nil end
         local char = LocalPlayer.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
         local myPos = char.HumanoidRootPart.Position
-        -- Build a set of all player character models so they are never targeted
-        local playerChars = {}
-        for _, plr in pairs(game:GetService("Players"):GetPlayers()) do
-            if plr.Character then playerChars[plr.Character] = true end
-        end
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if obj:IsA("Model") and obj ~= char and not playerChars[obj] then
-                local hum  = obj:FindFirstChildOfClass("Humanoid")
-                local root = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Torso")
+        local nearest, bestDist = nil, math.huge
+        for _, mob in ipairs(enemies:GetChildren()) do
+            if mob:IsA("Model") and (not mobName or mob.Name == mobName) then
+                local hum  = mob:FindFirstChildOfClass("Humanoid")
+                local root = mob:FindFirstChild("HumanoidRootPart")
                 if hum and root and hum.Health > 0 then
-                    local pass = (nameList == nil)
-                    if not pass then
-                        local low = obj.Name:lower()
-                        for _, n in ipairs(nameList) do
-                            if low:find(n:lower(), 1, true) then pass = true; break end
-                        end
-                    end
-                    if pass then
-                        local d = (myPos - root.Position).Magnitude
-                        if d < bestDist then bestDist = d; nearest = root end
-                    end
+                    local d = (myPos - root.Position).Magnitude
+                    if d < bestDist then bestDist = d; nearest = root end
                 end
             end
         end
         return nearest
     end
 
+    -- Find a boss anywhere in workspace (bosses spawn outside Enemies sometimes)
+    local function BF_FindBoss(bossName)
+        local nearest, bestDist = nil, math.huge
+        local char = LocalPlayer.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
+        local myPos = char.HumanoidRootPart.Position
+        local function scan(parent)
+            for _, m in pairs(parent:GetChildren()) do
+                if m:IsA("Model") and m.Name == bossName then
+                    local hum  = m:FindFirstChildOfClass("Humanoid")
+                    local root = m:FindFirstChild("HumanoidRootPart")
+                    if hum and root and hum.Health > 0 then
+                        local d = (myPos - root.Position).Magnitude
+                        if d < bestDist then bestDist = d; nearest = root end
+                    end
+                end
+            end
+        end
+        scan(workspace)
+        local enemies = workspace:FindFirstChild("Enemies")
+        if enemies then scan(enemies) end
+        return nearest
+    end
+
     local function BF_TeleportTo(root)
         local char = LocalPlayer.Character
-        if char and char:FindFirstChild("HumanoidRootPart") and root and root.Parent then
-            char.HumanoidRootPart.CFrame = root.CFrame * CFrame.new(0,0,-4)
+        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp and root and root.Parent then
+            hrp.CFrame = root.CFrame * CFrame.new(0, 2, -3)
         end
     end
 
+    -- Equip weapon by ToolTip (BF tools set ToolTip = "Melee", "Sword", or "Blox Fruit")
     local function BF_EquipWeapon(wType)
         pcall(function()
             local char = LocalPlayer.Character
             local hum  = char and char:FindFirstChildOfClass("Humanoid")
             if not hum then return end
+            -- Already equipped?
+            local equipped = char:FindFirstChildOfClass("Tool")
+            if equipped and equipped.ToolTip == wType then return end
+            -- Search backpack for matching ToolTip
+            for _, tool in pairs(LocalPlayer.Backpack:GetChildren()) do
+                if tool:IsA("Tool") and tool.ToolTip == wType then
+                    hum:EquipTool(tool)
+                    return
+                end
+            end
+            -- Fallback: name pattern (older/legacy weapons may lack ToolTip)
             for _, tool in pairs(LocalPlayer.Backpack:GetChildren()) do
                 if tool:IsA("Tool") then
                     local n = tool.Name:lower()
                     local match = (wType == "Sword" and (n:find("sword",1,true) or n:find("blade",1,true) or n:find("katana",1,true) or n:find("saber",1,true)))
-                               or ((wType == "Fruit" or wType == "Blox Fruit") and (n:find("fruit",1,true) or n:find("devil",1,true)))
+                               or (wType == "Blox Fruit" and (n:find("fruit",1,true) or n:find("devil",1,true)))
                                or  wType == "Melee"
                     if match then hum:EquipTool(tool); return end
                 end
@@ -1946,84 +2074,100 @@ local success, err = pcall(function()
         end)
     end
 
-    -- Shared current target + attack helper
+    -- Attack: fire touch interest from held tool's Handle into the target HRP, then activate
     local BF_CurTarget = nil
-
     local function BF_Attack(root)
         pcall(function()
             local char = LocalPlayer.Character
-            if not char then return end
-            for _, item in pairs(char:GetChildren()) do
-                if item:IsA("Tool") then
-                    pcall(function() item:Activate() end)
-                    local handle = item:FindFirstChild("Handle")
-                    if handle and root and root.Parent then
-                        if firetouchinterest then
-                            firetouchinterest(handle, root.Parent, 0)
-                            firetouchinterest(handle, root.Parent, 1)
-                        end
-                    end
-                    break
-                end
+            if not char or not root or not root.Parent then return end
+            local tool = char:FindFirstChildOfClass("Tool")
+            if not tool then return end
+            local handle = tool:FindFirstChild("Handle")
+            if handle and firetouchinterest then
+                firetouchinterest(handle, root, 0)
+                firetouchinterest(handle, root, 1)
             end
-            if root and root.Parent then
-                local cd = root.Parent:FindFirstChildOfClass("ClickDetector")
-                        or root:FindFirstChildOfClass("ClickDetector")
-                if cd and fireclickdetector then
-                    pcall(function() fireclickdetector(cd) end)
-                end
-            end
+            tool:Activate()
         end)
     end
 
-    -- NPC name → boss/material lookup tables
+    -- Material → mob lookup (mobs that drop the material when killed)
     local BF_MatMap = {
-        ["Dragon Scales"]   = {"Dragon Crew"},
-        ["Scrap Metal"]     = {"Pirate","Bandit"},
-        ["Magma Ore"]       = {"Military Soldier","Military Spy","Magma Ninja"},
-        ["Vampire Fangs"]   = {"Vampire"},
-        ["Leather"]         = {"Pirate","Monkey","Bandit"},
-        ["Angel Wings"]     = {"Sky Bandit","Sky Pirate","Blimp Pirate"},
-        ["Dark Fragment"]   = {"Darkbeard"},
-        ["Leviathan Heart"] = {"Leviathan"},
+        ["Dragon Scales"]   = "Dragon Crew Warrior",
+        ["Scrap Metal"]     = "Factory Staff",
+        ["Magma Ore"]       = "Military Soldier",
+        ["Vampire Fangs"]   = "Vampire",
+        ["Leather"]         = "Brute",
+        ["Angel Wings"]     = "Royal Squad",
+        ["Dark Fragment"]   = "Dark Master",
+        ["Leviathan Heart"] = "Water Fighter",
     }
 
-    -- Throttled target scan (every 0.5s) — avoids per-frame workspace:GetDescendants()
+    -- Bones drop from undead enemies (Third Sea Haunted Castle)
+    local BF_BoneMobs = {"Reborn Skeleton","Living Zombie","Demonic Soul","Possessed Mummy"}
+
+    -- Throttled target scan (every 0.5s)
     local BF_ScanTimer = 0
     table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
         if not getgenv().DiamondHub_Active then return end
         if not BFFrame.Visible then return end
         local farmOn = _G.BF_Config.AutoFarm or _G.BF_Config.AutoBones or
                        _G.BF_Config.AutoMaterial or _G.BF_Config.AutoBoss or _G.BF_Config.AutoMastery
-        if not farmOn then BF_CurTarget = nil; return end
+        if not farmOn then BF_CurTarget = nil; BF_LastQuest = nil; return end
         BF_ScanTimer = BF_ScanTimer + dt
         if BF_ScanTimer < 0.5 then return end
         BF_ScanTimer = 0
-        -- Equip weapon for active farm mode
+
+        -- Auto Farm Level: pick quest by player level, start it, hunt that mob
         if _G.BF_Config.AutoFarm then
             BF_EquipWeapon(_G.BF_Config.AutoFarmWeapon)
-        elseif _G.BF_Config.AutoMastery then
-            BF_EquipWeapon(_G.BF_Config.MasteryType)
+            local q = BF_QuestForLevel(BF_PlayerLevel())
+            if q then
+                BF_StartQuest(q[1], q[2])
+                BF_CurTarget = BF_FindEnemy(q[5])
+            end
+            return
         end
-        -- Find a target matching the active farm mode
-        local t = nil
-        if _G.BF_Config.AutoFarm or _G.BF_Config.AutoMastery then
-            t = BF_FindTarget(nil)
-        elseif _G.BF_Config.AutoBones then
-            t = BF_FindTarget({"Living Zombie","Demonic Soul","Possessed Mummy","Vampire"})
-        elseif _G.BF_Config.AutoMaterial then
-            local matKey = _G.BF_Config.SelectedMaterial:match("^([^%(]+)")
-            if matKey then matKey = matKey:gsub("%s+$","") end
-            t = BF_FindTarget(matKey and BF_MatMap[matKey])
-        elseif _G.BF_Config.AutoBoss then
+
+        -- Auto Farm Mastery: just hunt any enemy with selected weapon
+        if _G.BF_Config.AutoMastery then
+            BF_EquipWeapon(_G.BF_Config.MasteryType)
+            BF_CurTarget = BF_FindEnemy(nil)
+            return
+        end
+
+        -- Auto Farm Bones (undead at graveyard / haunted castle)
+        if _G.BF_Config.AutoBones then
+            BF_EquipWeapon(_G.BF_Config.AutoFarmWeapon)
+            local t = nil
+            for _, name in ipairs(BF_BoneMobs) do
+                t = BF_FindEnemy(name); if t then break end
+            end
+            BF_CurTarget = t
+            return
+        end
+
+        -- Auto Farm Material: hunt mob mapped to selected material
+        if _G.BF_Config.AutoMaterial then
+            BF_EquipWeapon(_G.BF_Config.AutoFarmWeapon)
+            local key = _G.BF_Config.SelectedMaterial:match("^([^%(]+)")
+            if key then key = key:gsub("%s+$","") end
+            local mob = key and BF_MatMap[key]
+            BF_CurTarget = mob and BF_FindEnemy(mob) or nil
+            return
+        end
+
+        -- Auto Farm Boss
+        if _G.BF_Config.AutoBoss then
+            BF_EquipWeapon(_G.BF_Config.AutoFarmWeapon)
             local raw  = _G.BF_Config.SelectedBoss
             local name = raw:match("^([^%(/]+)"); if name then name = name:gsub("%s+$","") end
-            if name then t = BF_FindTarget({name}) end
+            BF_CurTarget = name and BF_FindBoss(name) or nil
+            return
         end
-        BF_CurTarget = t
     end))
 
-    -- Teleport loop — every frame, no scan, just move character to cached target
+    -- Teleport loop (every frame, no scan)
     table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function()
         if not getgenv().DiamondHub_Active then return end
         if not BFFrame.Visible then return end
@@ -2032,13 +2176,13 @@ local success, err = pcall(function()
         end
     end))
 
-    -- Attack loop — throttled to 0.15s
+    -- Attack loop (throttled to 0.1s for snappier hits)
     local attackTimer = 0
     table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
         if not getgenv().DiamondHub_Active then return end
         if not BFFrame.Visible then return end
         attackTimer = attackTimer + dt
-        if attackTimer < 0.15 then return end
+        if attackTimer < 0.1 then return end
         attackTimer = 0
         if BF_CurTarget and BF_CurTarget.Parent then
             BF_Attack(BF_CurTarget)
