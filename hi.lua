@@ -2096,10 +2096,14 @@ local success, err = pcall(function()
         ["Leviathan"]               = CFrame.new(-13234, 332, -7625),
     }
 
-    -- Set destination for the smooth-fly loop below. Cooldown prevents the
-    -- scan loop (runs every 0.5s) from spamming new destinations before the
-    -- character has had time to arrive.
+    -- Smooth-fly state. CRITICAL: BF_Destination MUST be declared as a local here,
+    -- BEFORE BF_GoTo is defined. If BF_GoTo is parsed first, Lua resolves the
+    -- assignment "BF_Destination = cf" to a global (because no local of that
+    -- name is in scope yet), and the movement loop's later local-of-the-same-name
+    -- reads nil forever — flight silently never triggers.
     local BF_GoToCooldown = 0
+    local BF_CurTarget    = nil
+    local BF_Destination  = nil
     local function BF_GoTo(cf)
         if not cf then return end
         if tick() < BF_GoToCooldown then return end
@@ -2169,8 +2173,7 @@ local success, err = pcall(function()
     end
 
     -- Attack: fire touch interest from held tool's Handle into the target HRP, then activate
-    local BF_CurTarget  = nil
-    local BF_Destination = nil  -- CFrame to fly toward when no target is locked
+    -- (BF_CurTarget and BF_Destination are declared earlier — see "Smooth-fly state")
     local function BF_Attack(root)
         pcall(function()
             local char = LocalPlayer.Character
