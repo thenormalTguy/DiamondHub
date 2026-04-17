@@ -2011,13 +2011,30 @@ local success, err = pcall(function()
         {"ChocQuest",           3, 2450, 9999, "Sweet Thief",           3},
     }
 
+    -- Player level resolver. Tries Data.Level first (BF's primary store), then
+    -- falls back to leaderstats.Level. Returns 0 only if both are missing /
+    -- not yet replicated — in which case the scan loop must NOT pick a quest
+    -- (otherwise the fallback below would send a fresh test account flying
+    -- to ChocQuest at Y=422 in the 3rd Sea: the "random sky location" bug).
     local function BF_PlayerLevel()
         local data = LocalPlayer:FindFirstChild("Data")
         local lvl  = data and data:FindFirstChild("Level")
-        return (lvl and lvl.Value) or 0
+        if lvl and typeof(lvl.Value) == "number" and lvl.Value > 0 then
+            return lvl.Value
+        end
+        local ls    = LocalPlayer:FindFirstChild("leaderstats")
+        local lvl2  = ls and ls:FindFirstChild("Level")
+        if lvl2 and typeof(lvl2.Value) == "number" and lvl2.Value > 0 then
+            return lvl2.Value
+        end
+        return 0
     end
 
     local function BF_QuestForLevel(lv)
+        -- Safety: never fall through to the highest-level quest when level
+        -- isn't known. That would teleport a low-level player to a 3rd-Sea
+        -- island they can't survive on. Default to the first quest instead.
+        if not lv or lv <= 0 then return BF_Quests[1] end
         for _, q in ipairs(BF_Quests) do
             if lv >= q[3] and lv <= q[4] then return q end
         end
@@ -2040,15 +2057,20 @@ local success, err = pcall(function()
     -- so without it, the scan loop can pick a far-away mob, clear the destination, and
     -- never trigger the teleport branch — the player just stands there.
     local BF_FIND_RADIUS = 600
+    -- Substring + case-insensitive match: BF mob model names sometimes have
+    -- numeric suffixes ("Bandit_1", "Vampire2") or capitalization variants.
+    -- Exact-match misses these, leaving the farm idle.
     local function BF_FindEnemy(mobName)
         local enemies = workspace:FindFirstChild("Enemies")
         if not enemies then return nil end
         local char = LocalPlayer.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
         local myPos = char.HumanoidRootPart.Position
+        local needle = mobName and mobName:lower() or nil
         local nearest, bestDist = nil, BF_FIND_RADIUS
         for _, mob in ipairs(enemies:GetChildren()) do
-            if mob:IsA("Model") and (not mobName or mob.Name == mobName) then
+            local nameMatch = (not needle) or (mob.Name and mob.Name:lower():find(needle, 1, true) ~= nil)
+            if mob:IsA("Model") and nameMatch then
                 local hum  = mob:FindFirstChildOfClass("Humanoid")
                 local root = mob:FindFirstChild("HumanoidRootPart")
                 if hum and root and hum.Health > 0 then
@@ -2180,16 +2202,102 @@ local success, err = pcall(function()
         return nearest
     end
 
-    -- Use ABSOLUTE position offset (no CFrame multiplication). Multiplying by
-    -- root.CFrame applies the mob's rotation to the offset — when a mob is
-    -- ragdolling/jumping/attacking its root tilts, and the player gets flung
-    -- sideways or skyward instead of standing next to it.
-    local function BF_TeleportTo(root)
+    -- Tween-based movement (server-friendly). Writing hrp.CFrame every
+    -- Heartbeat (60 Hz) trips Blox Fruits' anti-cheat, which respawns the
+    -- player at a random sky position as punishment. TweenService animates
+    -- the HRP smoothly and the server tolerates it.
+    local BF_CurTween     = nil   -- the currently-playing Tween
+    local BF_TweenTarget  = nil   -- Vector3 the current tween is heading to
+    local BF_NoclipConn   = nil   -- Stepped connection that sets all parts CanCollide=false
+
+    -- Debug flag (set _G.BF_Debug = true in console to enable). Throttled to
+    -- only fire warnings on CHANGES (target/destination), not every scan tick.
+    -- Default ON during current iteration so users can paste F9 output
+    -- if the farm misbehaves. Set _G.BF_Debug = false in console to silence.
+    if _G.BF_Debug == nil then _G.BF_Debug = true end
+    local BF_LastScanLine = ""
+    -- Single throttled scan-loop diagnostic. Fires only when the line CHANGES.
+    --   mode  : "Farm" / "Mastery" / "Bones" / "Material" / "Boss" / "Idle"
+    --   quest : quest key (e.g. "BanditQuest1") or "-"
+    --   dest  : "(x, y, z)" of teleport pad or "-"
+    --   mob   : mob name being searched ("Bandit") or "-"
+    --   found : "yes" / "no"
+    local function BF_DbgScan(mode, quest, destPos, mob, found)
+        if not _G.BF_Debug then return end
+        local destStr = destPos and string.format("(%d,%d,%d)", destPos.X, destPos.Y, destPos.Z) or "-"
+        local line = string.format("[Diamond Hub BF] mode=%s quest=%s dest=%s mob=%s found=%s",
+            mode or "-", quest or "-", destStr, mob or "-", found and "yes" or "no")
+        if line ~= BF_LastScanLine then warn(line); BF_LastScanLine = line end
+    end
+
+    -- Anti-cheat workaround: PlatformStand prevents Humanoid from fighting the
+    -- tween, and noclip lets us pass through walls/terrain en route to the mob.
+    -- Both are toggled OFF when we stop moving.
+    local function BF_SetNoclip(on)
+        if on and not BF_NoclipConn then
+            BF_NoclipConn = RunService.Stepped:Connect(function()
+                local char = LocalPlayer.Character
+                if not char then return end
+                for _, p in ipairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") and p.CanCollide then p.CanCollide = false end
+                end
+            end)
+        elseif (not on) and BF_NoclipConn then
+            BF_NoclipConn:Disconnect()
+            BF_NoclipConn = nil
+            -- Restore collisions on the character so physics behaves normally
+            -- when idle. (HumanoidRootPart is naturally CanCollide=false; the
+            -- Humanoid manages it, so re-enabling here is harmless.)
+            local char = LocalPlayer.Character
+            if char then
+                for _, p in ipairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+                        pcall(function() p.CanCollide = true end)
+                    end
+                end
+            end
+        end
+    end
+    local function BF_SetPlatformStand(on)
+        local char = LocalPlayer.Character
+        local hum  = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then pcall(function() hum.PlatformStand = on and true or false end) end
+    end
+
+    local function BF_StopTween()
+        if BF_CurTween then
+            pcall(function() BF_CurTween:Cancel() end)
+            BF_CurTween = nil
+        end
+        BF_TweenTarget = nil
+        BF_SetPlatformStand(false)
+        BF_SetNoclip(false)
+    end
+    local function BF_TweenTo(targetPos, speed)
         local char = LocalPlayer.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-        if hrp and root and root.Parent then
-            hrp.CFrame = CFrame.new(root.Position + Vector3.new(0, 4, 0))
+        if not hrp or not targetPos then return end
+        -- Already heading to this exact spot? Don't restart.
+        if BF_TweenTarget and (BF_TweenTarget - targetPos).Magnitude < 2
+           and BF_CurTween and BF_CurTween.PlaybackState == Enum.PlaybackState.Playing then
+            return
         end
+        if BF_CurTween then pcall(function() BF_CurTween:Cancel() end); BF_CurTween = nil end
+        BF_SetPlatformStand(true)
+        BF_SetNoclip(true)
+        local dist = (hrp.Position - targetPos).Magnitude
+        local time = math.clamp(dist / (speed or 250), 0.05, 8)
+        local info = TweenInfo.new(time, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+        BF_CurTween    = TweenService:Create(hrp, info, {CFrame = CFrame.new(targetPos)})
+        BF_TweenTarget = targetPos
+        BF_CurTween:Play()
+    end
+
+    -- Combat lock: tween onto the mob continuously (short hops keep us in range
+    -- as the mob moves). Absolute position offset, never rotated.
+    local function BF_TeleportTo(root)
+        if not root or not root.Parent then return end
+        BF_TweenTo(root.Position + Vector3.new(0, 4, 0), 400)
     end
 
     -- Equip weapon by ToolTip (BF tools set ToolTip = "Melee", "Sword", or "Blox Fruit")
@@ -2260,7 +2368,12 @@ local success, err = pcall(function()
         if not BFFrame.Visible then return end
         local farmOn = _G.BF_Config.AutoFarm or _G.BF_Config.AutoBones or
                        _G.BF_Config.AutoMaterial or _G.BF_Config.AutoBoss or _G.BF_Config.AutoMastery
-        if not farmOn then BF_CurTarget = nil; BF_Destination = nil; BF_LastQuest = nil; return end
+        if not farmOn then
+            BF_CurTarget = nil; BF_Destination = nil; BF_LastQuest = nil
+            BF_StopTween()
+            BF_DbgScan("Idle", nil, nil, nil, false)
+            return
+        end
         BF_ScanTimer = BF_ScanTimer + dt
         if BF_ScanTimer < 0.5 then return end
         BF_ScanTimer = 0
@@ -2275,6 +2388,9 @@ local success, err = pcall(function()
                 local t = BF_FindEnemy(q[5])
                 if t then BF_Destination = nil else BF_GoTo(BF_QuestCFrame[q[1]]) end
                 BF_CurTarget = t
+                BF_DbgScan("Level", q[1], BF_Destination and BF_Destination.Position or nil, q[5], t ~= nil)
+            else
+                BF_DbgScan("Level", nil, nil, nil, false)
             end
             return
         end
@@ -2283,18 +2399,20 @@ local success, err = pcall(function()
         if _G.BF_Config.AutoMastery then
             BF_EquipWeapon(_G.BF_Config.MasteryType)
             BF_CurTarget = BF_FindEnemy(nil)
+            BF_DbgScan("Mastery", nil, nil, "<any>", BF_CurTarget ~= nil)
             return
         end
 
         -- Auto Farm Bones (undead at Haunted Castle, 3rd Sea)
         if _G.BF_Config.AutoBones then
             BF_EquipWeapon(_G.BF_Config.AutoFarmWeapon)
-            local t = nil
+            local t, mobFound = nil, nil
             for _, name in ipairs(BF_BoneMobs) do
-                t = BF_FindEnemy(name); if t then break end
+                t = BF_FindEnemy(name); if t then mobFound = name; break end
             end
             if t then BF_Destination = nil else BF_GoTo(BF_QuestCFrame["HauntedQuest2"]) end
             BF_CurTarget = t
+            BF_DbgScan("Bones", "HauntedQuest2", BF_Destination and BF_Destination.Position or nil, mobFound or BF_BoneMobs[1], t ~= nil)
             return
         end
 
@@ -2305,17 +2423,18 @@ local success, err = pcall(function()
             if key then key = key:gsub("%s+$","") end
             local mob = key and BF_MatMap[key]
             local t   = mob and BF_FindEnemy(mob) or nil
+            local questKey = nil
             if t then
                 BF_Destination = nil
             elseif mob then
-                -- Look up the quest that spawns this mob and fly there
                 for _, q in ipairs(BF_Quests) do
                     if q[5] == mob and BF_QuestCFrame[q[1]] then
-                        BF_GoTo(BF_QuestCFrame[q[1]]); break
+                        BF_GoTo(BF_QuestCFrame[q[1]]); questKey = q[1]; break
                     end
                 end
             end
             BF_CurTarget = t
+            BF_DbgScan("Material", questKey, BF_Destination and BF_Destination.Position or nil, mob, t ~= nil)
             return
         end
 
@@ -2331,45 +2450,44 @@ local success, err = pcall(function()
                 BF_GoTo(BF_BossCFrame[name])
             end
             BF_CurTarget = t
+            BF_DbgScan("Boss", name, BF_Destination and BF_Destination.Position or nil, name, t ~= nil)
             return
         end
     end))
 
-    -- Movement loop (every frame). PINS the player to a position each frame:
-    --   1. Combat target locked → pin on top of the mob
-    --   2. Island destination set → pin on top of the landing pad (8 studs up)
-    --
-    -- Pinning every frame is required because a one-shot CFrame write is
-    -- immediately undone by Roblox character physics: gravity drops the
-    -- player off sky islands into the void, the server respawns them at
-    -- their spawn point ("original location"), and the cycle repeats —
-    -- which is exactly the "fly to sky then back to spawn, repeat" bug.
-    -- Continuous pinning holds the character on the pad until a mob streams
-    -- in within range and combat lock takes over.
+    -- Movement controller (throttled to 0.25s — NOT every frame). Tween-based
+    -- because per-frame CFrame writes trip BF's anti-cheat and get the player
+    -- yeeted to a random sky coord ("stuck on a random sky location" bug).
+    --   1. Combat target locked → short tween onto the mob
+    --   2. Island destination   → long tween to landing pad
+    --   3. Idle                 → cancel any running tween
+    local BF_MoveTimer = 0
     table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
         if not getgenv().DiamondHub_Active then return end
         if not BFFrame.Visible then return end
+        BF_MoveTimer = BF_MoveTimer + dt
+        if BF_MoveTimer < 0.25 then return end
+        BF_MoveTimer = 0
 
         local char = LocalPlayer.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-        local hum  = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp then return end
 
-        -- Priority 1: pin to combat target
+        -- Priority 1: combat target → tween onto it
         if BF_CurTarget and BF_CurTarget.Parent then
             BF_TeleportTo(BF_CurTarget)
             return
         end
 
-        -- Priority 2: pin to island destination (every frame)
+        -- Priority 2: island destination → tween to landing pad
         if BF_Destination then
             local landPos = BF_Destination.Position + Vector3.new(0, 8, 0)
-            -- Disable jump/walk physics while pinned so the Humanoid doesn't
-            -- fight our CFrame writes (no jump, no fall acceleration buildup).
-            if hum then hum.PlatformStand = false; hum.Jump = false end
-            hrp.CFrame = CFrame.new(landPos)
+            BF_TweenTo(landPos, 250)
             return
         end
+
+        -- Idle → kill any leftover tween (also resets PlatformStand + noclip)
+        BF_StopTween()
     end))
 
     --// ─── AUTO BUY ENGINE ─────────────────────────────────────────
