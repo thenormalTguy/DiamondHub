@@ -2311,19 +2311,33 @@ local success, err = pcall(function()
         BF_CurTween:Play()
     end
 
-    -- COMBAT lock. Direct CFrame write onto the mob (server accepts close-range
-    -- writes — this is how every working BF auto-farm "sticks" to the target).
-    -- Cancels any in-flight TRAVEL tween first.
+    -- COMBAT lock. CRITICAL distance gate:
+    --   • If the mob is < BF_COMBAT_RANGE (200 studs), snap CFrame onto it.
+    --     Close-range writes are accepted by the server.
+    --   • If the mob is FAR (e.g. we're mid-flight over water and the scan
+    --     loop just locked onto a streamed mob from another island), do NOT
+    --     snap — the server will roll us back into the water. Tween to the
+    --     mob at travel speed instead. Once we're inside combat range the
+    --     next tick will snap us in cleanly.
+    local BF_COMBAT_RANGE = 200
     local function BF_TeleportTo(root)
         if not root or not root.Parent then return end
         local char = LocalPlayer.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
+        BF_SetNoclip(true)
+        local targetPos = root.Position
+        local dist      = (hrp.Position - targetPos).Magnitude
+        if dist > BF_COMBAT_RANGE then
+            -- Too far for a safe direct write — tween there like a destination.
+            BF_TweenTo(targetPos + Vector3.new(0, 5, 0), BF_TRAVEL_SPEED)
+            return
+        end
+        -- In range → cancel any travel tween and snap onto the mob.
         if BF_CurTween then
             pcall(function() BF_CurTween:Cancel() end); BF_CurTween = nil
         end
         BF_TweenTarget = nil
-        BF_SetNoclip(true)
         pcall(function()
             hrp.CFrame = root.CFrame * CFrame.new(0, 3, 5)
         end)
