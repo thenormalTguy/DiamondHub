@@ -1992,16 +1992,17 @@ local success, err = pcall(function()
         end
     end
 
-    -- Find nearest enemy in workspace.Enemies (the BF mob container)
+    -- Find nearest enemy in workspace.Enemies (substring match — survives naming variants)
     local function BF_FindEnemy(mobName)
         local enemies = workspace:FindFirstChild("Enemies")
         if not enemies then return nil end
         local char = LocalPlayer.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
         local myPos = char.HumanoidRootPart.Position
+        local low = mobName and mobName:lower() or nil
         local nearest, bestDist = nil, math.huge
         for _, mob in ipairs(enemies:GetChildren()) do
-            if mob:IsA("Model") and (not mobName or mob.Name == mobName) then
+            if mob:IsA("Model") and (not low or mob.Name:lower():find(low, 1, true)) then
                 local hum  = mob:FindFirstChildOfClass("Humanoid")
                 local root = mob:FindFirstChild("HumanoidRootPart")
                 if hum and root and hum.Health > 0 then
@@ -2011,6 +2012,94 @@ local success, err = pcall(function()
             end
         end
         return nearest
+    end
+
+    -- Quest island spawn locations (teleport here if no quest mob is loaded near us)
+    local BF_QuestCFrame = {
+        ["BanditQuest1"]        = CFrame.new(1056,   16, 1547),
+        ["JungleQuest"]         = CFrame.new(-1612,  37,  154),
+        ["BuggyQuest1"]         = CFrame.new(-1140,   5, 3825),
+        ["DesertQuest"]         = CFrame.new( 944,    7, 4373),
+        ["SnowQuest"]           = CFrame.new(1356,  105,-1297),
+        ["MarineQuest2"]        = CFrame.new(-5035,  29, 4324),
+        ["SkyQuest"]            = CFrame.new(-4869, 717,-2667),
+        ["PrisonerQuest"]       = CFrame.new(5308,    1,  474),
+        ["ColosseumQuest"]      = CFrame.new(-1577,   8,-2984),
+        ["MagmaQuest"]          = CFrame.new(-5318,  13, 8517),
+        ["FishmanQuest"]        = CFrame.new(61135,  19, 1819),
+        ["SkyExp1Quest"]        = CFrame.new(-7913,5544, -380),
+        ["SkyExp2Quest"]        = CFrame.new(-7842,5616,-1325),
+        ["FountainQuest"]       = CFrame.new(5258,   39, 4050),
+        -- 2nd Sea
+        ["Area1Quest"]          = CFrame.new(-1450,  30,   -3),
+        ["Area2Quest"]          = CFrame.new(-1817,  50, 3613),
+        ["MarineQuest3"]        = CFrame.new(-2451,  73,-3219),
+        ["ZombieQuest"]         = CFrame.new(-5648,   3, -793),
+        ["SnowMountainQuest"]   = CFrame.new(606,   402,-5372),
+        ["IceSideQuest"]        = CFrame.new(-6061,  16,-5165),
+        ["FireSideQuest"]       = CFrame.new(-5417,  16,-5299),
+        ["ZQuest"]              = CFrame.new(-7095, 213,-8167),
+        ["GraveyardQuest"]      = CFrame.new(-5972,  22,-1411),
+        ["PiratePortQuest"]     = CFrame.new(-290,   43, 5577),
+        -- 3rd Sea
+        ["AmazonQuest"]         = CFrame.new(5814,   52,-1118),
+        ["MarineTreeIsland"]    = CFrame.new(2333,   26,-6738),
+        ["DeepForestIsland"]    = CFrame.new(-9510, 143, 5557),
+        ["DeepForestIsland3"]   = CFrame.new(-13234,332,-7625),
+        ["HauntedQuest1"]       = CFrame.new(-9518, 143, 5567),
+        ["HauntedQuest2"]       = CFrame.new(-9518, 143, 5567),
+        ["IceCreamIslandQuest"] = CFrame.new(-902,  445,-10963),
+        ["CakeQuest1"]          = CFrame.new(-1812,  19,-11862),
+        ["CakeQuest2"]          = CFrame.new(-1812,  19,-11862),
+        ["ChocQuest"]           = CFrame.new(-12702,422,-7570),
+    }
+
+    -- Boss spawn locations
+    local BF_BossCFrame = {
+        ["Gorilla King"]            = CFrame.new(-1085,  39, -487),
+        ["Bobby"]                   = CFrame.new(-1141,   5, 3831),
+        ["The Saw"]                 = CFrame.new(-768,   23, 1612),
+        ["Yeti"]                    = CFrame.new(1209,  126,-1488),
+        ["Mob Leader"]              = CFrame.new(-1149,  43, -570),
+        ["Vice Admiral"]            = CFrame.new(-5039,  29, 4324),
+        ["Saber Expert"]            = CFrame.new(-1438,  29, -100),
+        ["Warden"]                  = CFrame.new(5310,    1,  502),
+        ["Chief Warden"]            = CFrame.new(5301,    1,  733),
+        ["Swan"]                    = CFrame.new(2287,   16,  864),
+        ["Magma Admiral"]           = CFrame.new(-5747,  16,-3477),
+        ["Fishman Lord"]            = CFrame.new(61135,  19, 1819),
+        ["Wysper"]                  = CFrame.new(-7858,5544,-377),
+        ["Thunder God"]             = CFrame.new(-7912,5546,-1789),
+        ["Cyborg"]                  = CFrame.new(6265,  295,-6968),
+        ["Ice Admiral"]             = CFrame.new(1037,  126,-1340),
+        ["Greybeard"]               = CFrame.new(-5078,  88,-3145),
+        ["Diamond"]                 = CFrame.new(-2096,  17, -106),
+        ["Jeremy"]                  = CFrame.new(2298,   29,  886),
+        ["Fajita"]                  = CFrame.new(-1424,   8,-3074),
+        ["Don Swan"]                = CFrame.new(2330,  144, 875),
+        ["Darkbeard"]               = CFrame.new(3676,  121,-3110),
+        ["Order"]                   = CFrame.new(-6217,  29,-5045),
+        ["Cursed Captain"]          = CFrame.new(916,   122, 33291),
+        ["Smoke Admiral"]           = CFrame.new(-5072, 25,-2913),
+        ["Awakened Ice Admiral"]    = CFrame.new(1074, 127, -1185),
+        ["Tide Keeper"]             = CFrame.new(-3792, 137, -11369),
+        ["Stone"]                   = CFrame.new(-1632, 76, -110),
+        ["Island Empress"]          = CFrame.new(5685, 49, -918),
+        ["Kilo Admiral"]            = CFrame.new(2547, 26, -6744),
+        ["Captain Elephant"]        = CFrame.new(-12127, 332, -7625),
+        ["Beautiful Pirate"]        = CFrame.new(-12009, 332, -7393),
+        ["Soul Reaper"]             = CFrame.new(-9519, 142, 5567),
+        ["Cake Queen"]              = CFrame.new(-2104, 39, -12089),
+        ["Dough King"]              = CFrame.new(-2173, 38, -12018),
+        ["Rip_indra"]               = CFrame.new(-13059, 332, -7758),
+        ["Leviathan"]               = CFrame.new(-13234, 332, -7625),
+    }
+
+    -- Helper: teleport to a CFrame (used as fallback when no target loaded yet)
+    local function BF_GoTo(cf)
+        local char = LocalPlayer.Character
+        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp and cf then hrp.CFrame = cf end
     end
 
     -- Find a boss anywhere in workspace (bosses spawn outside Enemies sometimes)
@@ -2118,51 +2207,68 @@ local success, err = pcall(function()
         if BF_ScanTimer < 0.5 then return end
         BF_ScanTimer = 0
 
-        -- Auto Farm Level: pick quest by player level, start it, hunt that mob
+        -- Auto Farm Level: pick quest by player level, start quest, hunt that mob
+        -- (teleports to quest island if mob not loaded near us)
         if _G.BF_Config.AutoFarm then
             BF_EquipWeapon(_G.BF_Config.AutoFarmWeapon)
             local q = BF_QuestForLevel(BF_PlayerLevel())
             if q then
                 BF_StartQuest(q[1], q[2])
-                BF_CurTarget = BF_FindEnemy(q[5])
+                local t = BF_FindEnemy(q[5])
+                if not t then BF_GoTo(BF_QuestCFrame[q[1]]) end
+                BF_CurTarget = t
             end
             return
         end
 
-        -- Auto Farm Mastery: just hunt any enemy with selected weapon
+        -- Auto Farm Mastery: hunt any nearby enemy with selected mastery weapon
         if _G.BF_Config.AutoMastery then
             BF_EquipWeapon(_G.BF_Config.MasteryType)
             BF_CurTarget = BF_FindEnemy(nil)
             return
         end
 
-        -- Auto Farm Bones (undead at graveyard / haunted castle)
+        -- Auto Farm Bones (undead at Haunted Castle, 3rd Sea)
         if _G.BF_Config.AutoBones then
             BF_EquipWeapon(_G.BF_Config.AutoFarmWeapon)
             local t = nil
             for _, name in ipairs(BF_BoneMobs) do
                 t = BF_FindEnemy(name); if t then break end
             end
+            if not t then BF_GoTo(BF_QuestCFrame["HauntedQuest2"]) end
             BF_CurTarget = t
             return
         end
 
-        -- Auto Farm Material: hunt mob mapped to selected material
+        -- Auto Farm Material: hunt the mob mapped to selected material
         if _G.BF_Config.AutoMaterial then
             BF_EquipWeapon(_G.BF_Config.AutoFarmWeapon)
             local key = _G.BF_Config.SelectedMaterial:match("^([^%(]+)")
             if key then key = key:gsub("%s+$","") end
             local mob = key and BF_MatMap[key]
-            BF_CurTarget = mob and BF_FindEnemy(mob) or nil
+            local t   = mob and BF_FindEnemy(mob) or nil
+            if not t and mob then
+                -- Try to find which quest spawns this mob and teleport there
+                for _, q in ipairs(BF_Quests) do
+                    if q[5] == mob and BF_QuestCFrame[q[1]] then
+                        BF_GoTo(BF_QuestCFrame[q[1]]); break
+                    end
+                end
+            end
+            BF_CurTarget = t
             return
         end
 
-        -- Auto Farm Boss
+        -- Auto Farm Boss: teleport to boss spawn if boss not loaded
         if _G.BF_Config.AutoBoss then
             BF_EquipWeapon(_G.BF_Config.AutoFarmWeapon)
             local raw  = _G.BF_Config.SelectedBoss
             local name = raw:match("^([^%(/]+)"); if name then name = name:gsub("%s+$","") end
-            BF_CurTarget = name and BF_FindBoss(name) or nil
+            local t = name and BF_FindBoss(name) or nil
+            if not t and name and BF_BossCFrame[name] then
+                BF_GoTo(BF_BossCFrame[name])
+            end
+            BF_CurTarget = t
             return
         end
     end))
