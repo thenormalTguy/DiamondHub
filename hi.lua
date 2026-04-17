@@ -1,4 +1,4 @@
---// DIAMOND HUB — Script Hub
+
 --// Version: 2.0 | Hub Edition
 
 -- Compatibility shim: fall back to _G on executors without getgenv
@@ -1281,8 +1281,859 @@ local success, err = pcall(function()
     end))
 
     --// ============================================================
+    --//  SCREEN 5 — BLOX FRUITS CHEAT UI
+    --// ============================================================
+
+    _G.BF_Config = {
+        AutoFarm          = false,
+        AutoFarmWeapon    = "Melee",
+        AutoBones         = false,
+        AutoMaterial      = false,
+        SelectedMaterial  = "Dragon Scales (Hydra Island — 3rd Sea)",
+        AutoBoss          = false,
+        SelectedBoss      = "Gorilla King (Lv. 25)",
+        AutoMastery       = false,
+        MasteryType       = "Melee",
+        AutoStats_Melee   = false,
+        AutoStats_Defense = false,
+        AutoStats_Sword   = false,
+        AutoStats_Gun     = false,
+        AutoStats_Fruit   = false,
+        ESP               = false,
+        FruitNotifier     = false,
+    }
+
+    -- Sea detection via PlaceId
+    local function BF_GetSea()
+        local id = game.PlaceId
+        if id == 4442272183 then return "Second" end
+        if id == 7449423635 then return "Third" end
+        return "First"
+    end
+
+    -- BF window (624x374, same as Rivals)
+    local BFFrame = MakeFrame(ScreenGui, {BackgroundColor3 = BG_MAIN})
+    BFFrame.Size     = UDim2.new(0,624,0,374)
+    BFFrame.Position = UDim2.new(0.5,-312,0.5,-187)
+    BFFrame.Visible  = false
+    BFFrame.ZIndex   = 10
+    BFFrame.ClipsDescendants = true
+    MakeCorner(BFFrame, 12)
+    MakeStroke(BFFrame, BORDER_CLR, 1, 0.1)
+
+    local BFHeader = MakeFrame(BFFrame, {BackgroundColor3 = BG_PANEL})
+    BFHeader.Size = UDim2.new(1,0,0,50)
+    MakeCorner(BFHeader, 12)
+    MakeFrame(BFHeader, {BackgroundColor3 = BG_PANEL, Size = UDim2.new(1,0,0,12), Position = UDim2.new(0,0,1,-12)})
+    MakeFrame(BFFrame,  {BackgroundColor3 = BORDER_CLR, Size = UDim2.new(1,0,0,1), Position = UDim2.new(0,0,0,50)})
+
+    MakeLabel(BFHeader, {
+        Text = "Diamond Hub",
+        TextSize = 14, Font = Enum.Font.GothamBold, TextColor3 = TEXT_BRIGHT,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(0,112,0,20), Position = UDim2.new(0,16,0,8),
+    })
+    MakeLabel(BFHeader, {
+        Text = "·", TextSize = 15, Font = Enum.Font.Gotham, TextColor3 = TEXT_DIM,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(0,10,1,0), Position = UDim2.new(0,126,0,0),
+    })
+    MakeLabel(BFHeader, {
+        Text = "Blox Fruits", TextSize = 12, Font = Enum.Font.Gotham, TextColor3 = TEXT_DIM,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(0,80,0,18), Position = UDim2.new(0,139,0,17),
+    })
+
+    local function BFHeaderBtn(xOff, icon, hoverColor)
+        local b = MakeButton(BFHeader, {
+            Text = icon, BackgroundColor3 = BG_MAIN, TextColor3 = TEXT_DIM,
+            Size = UDim2.new(0,26,0,26), Position = UDim2.new(1,xOff,0.5,-13),
+            TextSize = 13, Radius = 5,
+        })
+        b.BackgroundTransparency = 1
+        b.MouseEnter:Connect(function()
+            Tween(b, 0.12, {BackgroundTransparency = 0, BackgroundColor3 = hoverColor, TextColor3 = Color3.new(1,1,1)})
+        end)
+        b.MouseLeave:Connect(function()
+            Tween(b, 0.12, {BackgroundTransparency = 1, TextColor3 = TEXT_DIM})
+        end)
+        return b
+    end
+
+    local BFBackBtn  = BFHeaderBtn(-112, "Hub", BG_ITEM)
+    local BFMinBtn   = BFHeaderBtn(-74,  "—",  BG_ITEM)
+    local BFCloseBtn = BFHeaderBtn(-36,  "X",  Color3.fromRGB(190,45,55))
+
+    local bfDragging, bfDragStart, bfStartPos
+    BFHeader.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            bfDragging = true; bfDragStart = i.Position; bfStartPos = BFFrame.Position
+        end
+    end)
+    table.insert(getgenv().DiamondHub_Connections, UserInputService.InputChanged:Connect(function(i)
+        if bfDragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+            local d = i.Position - bfDragStart
+            BFFrame.Position = UDim2.new(bfStartPos.X.Scale, bfStartPos.X.Offset+d.X, bfStartPos.Y.Scale, bfStartPos.Y.Offset+d.Y)
+        end
+    end))
+    table.insert(getgenv().DiamondHub_Connections, UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then bfDragging = false end
+    end))
+
+    local BFBody = MakeFrame(BFFrame, {Transparency = 1})
+    BFBody.Size     = UDim2.new(1,0,1,-51)
+    BFBody.Position = UDim2.new(0,0,0,51)
+
+    local BFSidebar = MakeFrame(BFBody, {BackgroundColor3 = BG_PANEL})
+    BFSidebar.Size = UDim2.new(0,50,1,0)
+    local BFSideLayout = Instance.new("UIListLayout", BFSidebar)
+    BFSideLayout.Padding             = UDim.new(0,0)
+    BFSideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    BFSideLayout.FillDirection       = Enum.FillDirection.Vertical
+    BFSideLayout.SortOrder           = Enum.SortOrder.LayoutOrder
+    MakeFrame(BFBody, {BackgroundColor3 = BORDER_CLR, Size = UDim2.new(0,1,1,0), Position = UDim2.new(0,50,0,0)})
+
+    local BFPages = MakeFrame(BFBody, {Transparency = 1})
+    BFPages.Size     = UDim2.new(1,-52,1,0)
+    BFPages.Position = UDim2.new(0,52,0,0)
+
+    local BFTabs = {}
+    local function CreateBFTab(tabName, icon, layoutOrder, active)
+        local Frame = Instance.new("ScrollingFrame", BFPages)
+        Frame.Size = UDim2.new(1,0,1,0)
+        Frame.BackgroundTransparency = 1
+        Frame.Visible = active
+        Frame.ScrollBarThickness = 2
+        Frame.ScrollBarImageColor3 = Color3.fromRGB(50,50,65)
+        Frame.CanvasSize = UDim2.new(0,0,0,0)
+        pcall(function() Frame.AutomaticCanvasSize = Enum.AutomaticSize.Y end)
+        Frame.BorderSizePixel = 0
+        local Layout = Instance.new("UIListLayout", Frame)
+        Layout.Padding = UDim.new(0,8)
+        Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        local FPad = Instance.new("UIPadding", Frame)
+        FPad.PaddingTop = UDim.new(0,10); FPad.PaddingBottom = UDim.new(0,10)
+        FPad.PaddingLeft = UDim.new(0,10); FPad.PaddingRight = UDim.new(0,10)
+
+        local Slot = Instance.new("Frame", BFSidebar)
+        Slot.Size = UDim2.new(1,0,0,46)
+        Slot.BackgroundTransparency = 1
+        Slot.BorderSizePixel = 0
+        Slot.LayoutOrder = layoutOrder
+
+        local Bar = MakeFrame(Slot, {BackgroundColor3 = ACCENT})
+        Bar.Size = UDim2.new(0,3,0,26)
+        Bar.Position = UDim2.new(0,0,0.5,-13)
+        Bar.BackgroundTransparency = active and 0 or 1
+        MakeCorner(Bar, 2)
+
+        local Pill = MakeFrame(Slot, {BackgroundColor3 = BG_ITEM, Radius = 8})
+        Pill.Size = UDim2.new(0,36,0,36)
+        Pill.Position = UDim2.new(0.5,-18,0.5,-18)
+        Pill.BackgroundTransparency = active and 0 or 1
+
+        local Ico = MakeLabel(Slot, {
+            Text = icon, TextSize = 10, Font = Enum.Font.GothamBold,
+            TextColor3 = active and TEXT_BRIGHT or TEXT_MUTED,
+            Size = UDim2.new(1,0,1,0), TextWrapped = false,
+        })
+
+        local Btn = Instance.new("TextButton", Slot)
+        Btn.Size = UDim2.new(1,0,1,0)
+        Btn.BackgroundTransparency = 1
+        Btn.Text = ""
+        Btn.ZIndex = 5
+        Btn.MouseEnter:Connect(function()
+            if not (BFTabs[tabName] and BFTabs[tabName].F.Visible) then
+                Tween(Pill, 0.12, {BackgroundTransparency = 0.55, BackgroundColor3 = BG_ITEM})
+                Tween(Ico,  0.12, {TextColor3 = TEXT_DIM})
+            end
+        end)
+        Btn.MouseLeave:Connect(function()
+            if not (BFTabs[tabName] and BFTabs[tabName].F.Visible) then
+                Tween(Pill, 0.12, {BackgroundTransparency = 1})
+                Tween(Ico,  0.12, {TextColor3 = TEXT_MUTED})
+            end
+        end)
+        Btn.MouseButton1Click:Connect(function()
+            for _, v in pairs(BFTabs) do
+                v.F.Visible = false
+                Tween(v.Pill, 0.15, {BackgroundTransparency = 1})
+                Tween(v.Bar,  0.15, {BackgroundTransparency = 1})
+                Tween(v.Ico,  0.15, {TextColor3 = TEXT_MUTED})
+            end
+            Frame.Visible = true
+            Tween(Pill, 0.15, {BackgroundTransparency = 0, BackgroundColor3 = BG_ITEM})
+            Tween(Bar,  0.15, {BackgroundTransparency = 0})
+            Tween(Ico,  0.15, {TextColor3 = TEXT_BRIGHT})
+        end)
+        BFTabs[tabName] = {F = Frame, Pill = Pill, Bar = Bar, Ico = Ico}
+        return Frame
+    end
+
+    local BF_HomeTab    = CreateBFTab("BF_Home",    "Home",    1, true)
+    local BF_MainTab    = CreateBFTab("BF_Main",    "Main",    2, false)
+    local BF_MasteryTab = CreateBFTab("BF_Mastery", "Mastery", 3, false)
+    local BF_VisualsTab = CreateBFTab("BF_Visuals", "Visuals", 4, false)
+
+    local BFAvatarHolder = MakeFrame(BFBody, {Transparency = 1})
+    BFAvatarHolder.Size     = UDim2.new(0,50,0,48)
+    BFAvatarHolder.Position = UDim2.new(0,0,1,-48)
+    local BFAvatarImg = Instance.new("ImageLabel", BFAvatarHolder)
+    BFAvatarImg.Size     = UDim2.new(0,30,0,30)
+    BFAvatarImg.Position = UDim2.new(0.5,-15,0.5,-15)
+    BFAvatarImg.BackgroundColor3 = BG_ITEM
+    BFAvatarImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=150&h=150"
+    MakeCorner(BFAvatarImg, 15)
+    MakeStroke(BFAvatarImg, BORDER_CLR, 1, 0.15)
+
+    -- BF toggle (uses _G.BF_Config)
+    local function BFToggle(parent, label, sublabel, key)
+        local Row = MakeFrame(parent, {BackgroundColor3 = BG_CARD, Radius = 9})
+        Row.Size = UDim2.new(1,0,0,56)
+        MakeStroke(Row, BORDER_CLR, 1, 0.15)
+        MakeLabel(Row, {
+            Text = label, TextSize = 13, Font = Enum.Font.GothamBold, TextColor3 = TEXT_BRIGHT,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Size = UDim2.new(1,-68,0,19), Position = UDim2.new(0,14,0,9),
+        })
+        if sublabel and sublabel ~= "" then
+            MakeLabel(Row, {
+                Text = sublabel, TextSize = 11, Font = Enum.Font.Gotham, TextColor3 = TEXT_DIM,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Size = UDim2.new(1,-68,0,16), Position = UDim2.new(0,14,0,29),
+            })
+        end
+        local PillBG = MakeFrame(Row, {BackgroundColor3 = _G.BF_Config[key] and ACCENT or BG_ITEM, Radius = 100})
+        PillBG.Size = UDim2.new(0,40,0,22); PillBG.Position = UDim2.new(1,-52,0.5,-11)
+        MakeStroke(PillBG, BORDER_CLR, 1, 0.3)
+        local Dot = MakeFrame(PillBG, {BackgroundColor3 = Color3.new(1,1,1), Radius = 100})
+        Dot.Size = UDim2.new(0,16,0,16)
+        Dot.Position = _G.BF_Config[key] and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)
+        local Toggling = false
+        Row.InputBegan:Connect(function(i)
+            if i.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+            if Toggling then return end
+            Toggling = true
+            _G.BF_Config[key] = not _G.BF_Config[key]
+            local on = _G.BF_Config[key]
+            Tween(PillBG, 0.2, {BackgroundColor3 = on and ACCENT or BG_ITEM})
+            Tween(Dot,    0.2, {Position = on and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)})
+            task.wait(0.25); Toggling = false
+        end)
+        return Row
+    end
+
+    -- Inline expandable dropdown
+    local function BFDropdown(parent, label, options, configKey, defaultIdx)
+        if defaultIdx and (not _G.BF_Config[configKey] or _G.BF_Config[configKey] == "") then
+            _G.BF_Config[configKey] = options[defaultIdx]
+        end
+        local closedH = 52
+        local openH   = closedH + (#options * 30) + 6
+        local Wrap = MakeFrame(parent, {BackgroundColor3 = BG_CARD, Radius = 9})
+        Wrap.Size = UDim2.new(1,0,0,closedH)
+        Wrap.ClipsDescendants = true
+        MakeStroke(Wrap, BORDER_CLR, 1, 0.15)
+
+        MakeLabel(Wrap, {
+            Text = label, TextSize = 12, Font = Enum.Font.GothamBold, TextColor3 = TEXT_BRIGHT,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Size = UDim2.new(1,-48,0,18), Position = UDim2.new(0,12,0,8),
+        })
+        local SelLabel = MakeLabel(Wrap, {
+            Text = _G.BF_Config[configKey] or options[1] or "", TextSize = 11, Font = Enum.Font.Gotham, TextColor3 = ACCENT,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Size = UDim2.new(1,-48,0,16), Position = UDim2.new(0,12,0,28),
+        })
+        local ArrowBtn = MakeButton(Wrap, {
+            Text = "v", BackgroundColor3 = BG_ITEM, TextColor3 = TEXT_DIM, TextSize = 10,
+            Size = UDim2.new(0,28,0,24), Position = UDim2.new(1,-36,0,14), Radius = 5,
+        })
+
+        local OptionList = MakeFrame(Wrap, {Transparency = 1})
+        OptionList.Size     = UDim2.new(1,-16,0,#options * 30)
+        OptionList.Position = UDim2.new(0,8,0,closedH + 2)
+        local OLL = Instance.new("UIListLayout", OptionList)
+        OLL.Padding = UDim.new(0,2)
+        OLL.HorizontalAlignment = Enum.HorizontalAlignment.Left
+
+        local isOpen = false
+        local function CloseDropdown()
+            if isOpen then
+                isOpen = false
+                Tween(Wrap, 0.18, {Size = UDim2.new(1,0,0,closedH)}, Enum.EasingStyle.Quart)
+                ArrowBtn.Text = "v"
+            end
+        end
+
+        for _, opt in ipairs(options) do
+            local isSelected = (_G.BF_Config[configKey] == opt)
+            local OptBtn = MakeButton(OptionList, {
+                Text = opt,
+                BackgroundColor3 = isSelected and BG_ITEM or Color3.fromRGB(22,22,27),
+                TextColor3 = isSelected and ACCENT or TEXT_DIM,
+                TextSize = 11,
+                Size = UDim2.new(1,0,0,28),
+                Radius = 6,
+            })
+            OptBtn.TextXAlignment = Enum.TextXAlignment.Left
+            local op = Instance.new("UIPadding", OptBtn)
+            op.PaddingLeft = UDim.new(0,10)
+            OptBtn.MouseButton1Click:Connect(function()
+                _G.BF_Config[configKey] = opt
+                SelLabel.Text = opt
+                CloseDropdown()
+            end)
+        end
+
+        local function ToggleDrop()
+            isOpen = not isOpen
+            Tween(Wrap, 0.18, {Size = UDim2.new(1,0,0, isOpen and openH or closedH)}, Enum.EasingStyle.Quart)
+            ArrowBtn.Text = isOpen and "^" or "v"
+        end
+        ArrowBtn.MouseButton1Click:Connect(ToggleDrop)
+        local HdrClick = Instance.new("TextButton", Wrap)
+        HdrClick.Size = UDim2.new(1,-44,0,52)
+        HdrClick.BackgroundTransparency = 1
+        HdrClick.Text = ""
+        HdrClick.ZIndex = 5
+        HdrClick.MouseButton1Click:Connect(ToggleDrop)
+        return Wrap
+    end
+
+    -- Section divider label
+    local function BF_SecLabel(parent, text)
+        MakeLabel(parent, {
+            Text = text, TextSize = 10, Font = Enum.Font.GothamBold, TextColor3 = TEXT_DIM,
+            TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1,0,0,18),
+        })
+    end
+
+    --// ─── HOME TAB ─────────────────────────────────────────────────
+
+    local BF_GreetCard = MakeCard(BF_HomeTab, 68)
+    local BF_AvatarImg = Instance.new("ImageLabel", BF_GreetCard)
+    BF_AvatarImg.Size = UDim2.new(0,44,0,44); BF_AvatarImg.Position = UDim2.new(0,12,0.5,-22)
+    BF_AvatarImg.BackgroundColor3 = BG_ITEM
+    BF_AvatarImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. LocalPlayer.UserId .. "&w=150&h=150"
+    MakeCorner(BF_AvatarImg, 22); MakeStroke(BF_AvatarImg, BORDER_CLR, 1.5, 0.1)
+    MakeLabel(BF_GreetCard, {
+        Text = "Hello, " .. LocalPlayer.DisplayName, TextSize = 15, Font = Enum.Font.GothamBold,
+        TextColor3 = TEXT_BRIGHT, TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-72,0,20), Position = UDim2.new(0,66,0,12),
+    })
+    MakeLabel(BF_GreetCard, {
+        Text = LocalPlayer.Name .. "  ·  Diamond Hub  ·  Blox Fruits",
+        TextSize = 11, Font = Enum.Font.Gotham, TextColor3 = TEXT_DIM,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-72,0,16), Position = UDim2.new(0,66,0,36),
+    })
+
+    local BF_ColWrap = MakeFrame(BF_HomeTab, {Transparency = 1})
+    BF_ColWrap.Size = UDim2.new(1,0,0,168)
+    local BF_CL = Instance.new("UIListLayout", BF_ColWrap)
+    BF_CL.FillDirection = Enum.FillDirection.Horizontal
+    BF_CL.Padding = UDim.new(0,8)
+    BF_CL.HorizontalAlignment = Enum.HorizontalAlignment.Left
+
+    -- Session card
+    local BF_SessCard = MakeFrame(BF_ColWrap, {BackgroundColor3 = BG_CARD, Radius = 9})
+    BF_SessCard.Size = UDim2.new(0.5,-4,1,0)
+    MakeStroke(BF_SessCard, BORDER_CLR, 1, 0.15)
+    MakeLabel(BF_SessCard, {
+        Text = "Session", TextSize = 12, Font = Enum.Font.GothamBold, TextColor3 = TEXT_BRIGHT,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-12,0,18), Position = UDim2.new(0,11,0,9),
+    })
+    MakeLabel(BF_SessCard, {
+        Text = "Current session info", TextSize = 10, Font = Enum.Font.Gotham, TextColor3 = TEXT_DIM,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-12,0,14), Position = UDim2.new(0,11,0,25),
+    })
+    local function BF_SessPill(par, xs, xo, y, val, lbl)
+        local p = MakeFrame(par, {BackgroundColor3 = BG_ITEM, Radius = 6})
+        p.Size = UDim2.new(0.5,-10,0,44); p.Position = UDim2.new(xs,xo,0,y)
+        MakeLabel(p, {Text=tostring(val), TextSize=14, Font=Enum.Font.GothamBold, TextColor3=TEXT_BRIGHT,
+            TextXAlignment=Enum.TextXAlignment.Left, Size=UDim2.new(1,-8,0,19), Position=UDim2.new(0,8,0,6)})
+        MakeLabel(p, {Text=lbl, TextSize=10, Font=Enum.Font.Gotham, TextColor3=TEXT_DIM,
+            TextXAlignment=Enum.TextXAlignment.Left, Size=UDim2.new(1,-8,0,13), Position=UDim2.new(0,8,0,26)})
+    end
+    BF_SessPill(BF_SessCard,  0,  8, 44, #Players:GetPlayers(), "Players")
+    BF_SessPill(BF_SessCard, 0.5, 2, 44, BF_GetSea().." Sea",  "Current Sea")
+    BF_SessPill(BF_SessCard,  0,  8, 96, LocalPlayer.AccountAge.."d", "Account Age")
+    BF_SessPill(BF_SessCard, 0.5, 2, 96, "#"..tostring(LocalPlayer.UserId):sub(1,7), "User ID")
+
+    -- Hub status card
+    local BF_HubCard = MakeFrame(BF_ColWrap, {BackgroundColor3 = Color3.fromRGB(13,34,54), Radius = 9})
+    BF_HubCard.Size = UDim2.new(0.5,-4,1,0)
+    MakeStroke(BF_HubCard, Color3.fromRGB(0,90,160), 1, 0.35)
+    MakeLabel(BF_HubCard, {
+        Text = "Hub", TextSize = 12, Font = Enum.Font.GothamBold, TextColor3 = TEXT_BRIGHT,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-12,0,18), Position = UDim2.new(0,11,0,9),
+    })
+    MakeLabel(BF_HubCard, {
+        Text = "Diamond Hub is active and running", TextSize = 10, Font = Enum.Font.Gotham,
+        TextColor3 = Color3.fromRGB(120,165,210), TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-12,0,28), Position = UDim2.new(0,11,0,24), TextWrapped = true,
+    })
+    local BF_ActPill = MakeFrame(BF_HubCard, {BackgroundColor3 = Color3.fromRGB(9,46,78), Radius = 6})
+    BF_ActPill.Size = UDim2.new(1,-18,0,36); BF_ActPill.Position = UDim2.new(0,9,0,58)
+    local BF_GDot = MakeFrame(BF_ActPill, {BackgroundColor3 = Color3.fromRGB(55,215,95), Radius = 100})
+    BF_GDot.Size = UDim2.new(0,7,0,7); BF_GDot.Position = UDim2.new(0,10,0.5,-3)
+    MakeLabel(BF_ActPill, {
+        Text = "Hub Active", TextSize = 13, Font = Enum.Font.GothamBold,
+        TextColor3 = Color3.fromRGB(195,230,255), TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-28,1,0), Position = UDim2.new(0,24,0,0),
+    })
+    local BF_VerPill2 = MakeFrame(BF_HubCard, {BackgroundColor3 = Color3.fromRGB(9,46,78), Radius = 6})
+    BF_VerPill2.Size = UDim2.new(1,-18,0,36); BF_VerPill2.Position = UDim2.new(0,9,0,100)
+    MakeLabel(BF_VerPill2, {
+        Text = "v2.0  ·  Hub Edition", TextSize = 12, Font = Enum.Font.Gotham,
+        TextColor3 = Color3.fromRGB(145,195,240), TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-14,1,0), Position = UDim2.new(0,10,0,0),
+    })
+
+    local BF_DiscRow = MakeFrame(BF_HomeTab, {BackgroundColor3 = Color3.fromRGB(29,32,78), Radius = 9})
+    BF_DiscRow.Size = UDim2.new(1,0,0,52)
+    MakeStroke(BF_DiscRow, Color3.fromRGB(78,86,210), 1, 0.3)
+    MakeLabel(BF_DiscRow, {
+        Text = "Discord", TextSize = 14, Font = Enum.Font.GothamBold,
+        TextColor3 = Color3.fromRGB(195,205,255), TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-100,0,22), Position = UDim2.new(0,13,0,7),
+    })
+    MakeLabel(BF_DiscRow, {
+        Text = "Tap to join the Support Server", TextSize = 11, Font = Enum.Font.Gotham,
+        TextColor3 = Color3.fromRGB(130,140,210), TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-100,0,16), Position = UDim2.new(0,13,0,30),
+    })
+    local BF_DiscBtn = MakeButton(BF_DiscRow, {
+        Text = "Join", BackgroundColor3 = Color3.fromRGB(78,86,210), TextColor3 = Color3.new(1,1,1),
+        Size = UDim2.new(0,52,0,28), Position = UDim2.new(1,-64,0.5,-14), TextSize = 12, Radius = 6,
+    })
+    BF_DiscBtn.MouseEnter:Connect(function() Tween(BF_DiscBtn, 0.13, {BackgroundColor3 = Color3.fromRGB(100,110,240)}) end)
+    BF_DiscBtn.MouseLeave:Connect(function() Tween(BF_DiscBtn, 0.13, {BackgroundColor3 = Color3.fromRGB(78,86,210)}) end)
+
+    --// ─── MAIN TAB ─────────────────────────────────────────────────
+
+    BF_SecLabel(BF_MainTab, "AUTO FARM LEVEL")
+    BFToggle(BF_MainTab, "Auto Farm Level", "Teleports to nearest NPC and attacks", "AutoFarm")
+    BFDropdown(BF_MainTab, "Attack Weapon", {"Melee", "Blox Fruit", "Sword"}, "AutoFarmWeapon")
+
+    BF_SecLabel(BF_MainTab, "AUTO FARM BONES")
+    local BonesRow = MakeFrame(BF_MainTab, {BackgroundColor3 = BG_CARD, Radius = 9})
+    BonesRow.Size = UDim2.new(1,0,0,56)
+    MakeStroke(BonesRow, BORDER_CLR, 1, 0.15)
+    MakeLabel(BonesRow, {
+        Text = "Auto Farm Bones", TextSize = 13, Font = Enum.Font.GothamBold, TextColor3 = TEXT_BRIGHT,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-68,0,19), Position = UDim2.new(0,14,0,9),
+    })
+    local BonesSubLbl = MakeLabel(BonesRow, {
+        Text = "Haunted Castle: Zombies, Souls, Mummies, Vampires",
+        TextSize = 11, Font = Enum.Font.Gotham, TextColor3 = TEXT_DIM,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1,-68,0,16), Position = UDim2.new(0,14,0,29),
+    })
+    local BonesPill = MakeFrame(BonesRow, {BackgroundColor3 = BG_ITEM, Radius = 100})
+    BonesPill.Size = UDim2.new(0,40,0,22); BonesPill.Position = UDim2.new(1,-52,0.5,-11)
+    MakeStroke(BonesPill, BORDER_CLR, 1, 0.3)
+    local BonesDot = MakeFrame(BonesPill, {BackgroundColor3 = Color3.new(1,1,1), Radius = 100})
+    BonesDot.Size = UDim2.new(0,16,0,16); BonesDot.Position = UDim2.new(0,3,0.5,-8)
+    local BonesToggling = false
+    BonesRow.InputBegan:Connect(function(i)
+        if i.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+        if BonesToggling then return end
+        BonesToggling = true
+        if BF_GetSea() ~= "Third" then
+            BonesSubLbl.Text = "Requires Third Sea! You are in " .. BF_GetSea() .. " Sea."
+            BonesSubLbl.TextColor3 = Color3.fromRGB(220,80,80)
+            task.wait(2.5)
+            BonesSubLbl.Text = "Haunted Castle: Zombies, Souls, Mummies, Vampires"
+            BonesSubLbl.TextColor3 = TEXT_DIM
+            BonesToggling = false
+            return
+        end
+        _G.BF_Config.AutoBones = not _G.BF_Config.AutoBones
+        local on = _G.BF_Config.AutoBones
+        Tween(BonesPill, 0.2, {BackgroundColor3 = on and ACCENT or BG_ITEM})
+        Tween(BonesDot,  0.2, {Position = on and UDim2.new(1,-19,0.5,-8) or UDim2.new(0,3,0.5,-8)})
+        task.wait(0.25); BonesToggling = false
+    end)
+
+    BF_SecLabel(BF_MainTab, "AUTO FARM MATERIAL")
+    BFToggle(BF_MainTab, "Auto Farm Material", "Kills NPCs dropping the selected material", "AutoMaterial")
+    BFDropdown(BF_MainTab, "Select Material", {
+        "Dragon Scales (Hydra Island — 3rd Sea)",
+        "Scrap Metal (Junk Island — All Seas)",
+        "Magma Ore (Magma Village — 1st/2nd Sea)",
+        "Vampire Fangs (Graveyard — 2nd Sea)",
+        "Leather (Port Town / Jungle — 1st Sea)",
+        "Angel Wings (Upper Skylands — 1st Sea)",
+        "Dark Fragment (Dark Arena — 2nd Sea)",
+        "Leviathan Heart (Sea Zone — 3rd Sea)",
+    }, "SelectedMaterial", 1)
+
+    BF_SecLabel(BF_MainTab, "AUTO FARM BOSS")
+    BFToggle(BF_MainTab, "Auto Farm Boss", "Attacks the selected boss continuously", "AutoBoss")
+    BF_SecLabel(BF_MainTab, "First Sea Bosses")
+    BFDropdown(BF_MainTab, "First Sea Boss", {
+        "Gorilla King (Lv. 25)",
+        "Bobby / The Clown (Lv. 55)",
+        "The Saw (Lv. 100)",
+        "Yeti (Lv. 105)",
+        "Mob Leader (Lv. 120)",
+        "Vice Admiral (Lv. 130)",
+        "Saber Expert (Lv. 200)",
+        "Warden (Lv. 220)",
+        "Chief Warden (Lv. 230)",
+        "Swan (Lv. 240)",
+        "Magma Admiral (Lv. 350)",
+        "Fishman Lord (Lv. 425)",
+        "Wysper (Lv. 500)",
+        "Thunder God / Enel (Lv. 575)",
+        "Cyborg (Lv. 675)",
+        "Ice Admiral (Lv. 700)",
+        "Greybeard (Lv. 750)",
+    }, "SelectedBoss", 1)
+    BF_SecLabel(BF_MainTab, "Second Sea Bosses")
+    BFDropdown(BF_MainTab, "Second Sea Boss", {
+        "Diamond (Lv. 750)",
+        "Jeremy (Lv. 850)",
+        "Fajita (Lv. 925)",
+        "Don Swan (Lv. 1000)",
+        "Darkbeard (Lv. 1000)",
+        "Order (Lv. 1250)",
+        "Cursed Captain (Lv. 1325)",
+        "Smoke Admiral (Lv. 1150)",
+        "Awakened Ice Admiral (Lv. 1400)",
+        "Tide Keeper (Lv. 1475)",
+    }, "SelectedBoss")
+    BF_SecLabel(BF_MainTab, "Third Sea Bosses")
+    BFDropdown(BF_MainTab, "Third Sea Boss", {
+        "Stone (Lv. 1550)",
+        "Island Empress (Lv. 1675)",
+        "Kilo Admiral (Lv. 1750)",
+        "Captain Elephant (Lv. 1875)",
+        "Beautiful Pirate (Lv. 1950)",
+        "Soul Reaper (Lv. 2100)",
+        "Cake Queen (Lv. 2175)",
+        "Dough King (Lv. 2300)",
+        "Rip_indra (Lv. 5000)",
+        "Leviathan (Sea Boss)",
+    }, "SelectedBoss")
+
+    --// ─── MASTERY TAB ──────────────────────────────────────────────
+
+    BF_SecLabel(BF_MasteryTab, "AUTO FARM MASTERY")
+    BFToggle(BF_MasteryTab, "Auto Farm Mastery", "Farms mastery using selected weapon", "AutoMastery")
+    BFDropdown(BF_MasteryTab, "Mastery Weapon", {"Melee", "Fruit", "Sword"}, "MasteryType")
+
+    BF_SecLabel(BF_MasteryTab, "AUTO ADD STATS")
+    BFToggle(BF_MasteryTab, "Auto Add Melee Stats",   "Spends stat points into Melee",      "AutoStats_Melee")
+    BFToggle(BF_MasteryTab, "Auto Add Defense Stats", "Spends stat points into Defense",    "AutoStats_Defense")
+    BFToggle(BF_MasteryTab, "Auto Add Sword Stats",   "Spends stat points into Sword",      "AutoStats_Sword")
+    BFToggle(BF_MasteryTab, "Auto Add Gun Stats",     "Spends stat points into Gun",        "AutoStats_Gun")
+    BFToggle(BF_MasteryTab, "Auto Add Fruit Stats",   "Spends stat points into Blox Fruit", "AutoStats_Fruit")
+
+    --// ─── VISUALS TAB ──────────────────────────────────────────────
+
+    BFToggle(BF_VisualsTab, "ESP Players",    "Highlights all players through walls",  "ESP")
+    BFToggle(BF_VisualsTab, "Fruit Notifier", "Teleports to nearby dropped fruits",    "FruitNotifier")
+
+    --// ─── BF MINIMIZE & CLOSE ─────────────────────────────────────
+
+    local BFMinimized = false
+    BFMinBtn.MouseButton1Click:Connect(function()
+        BFMinimized = not BFMinimized
+        if BFMinimized then
+            BFBody.Visible = false
+            Tween(BFFrame, 0.28, {Size = UDim2.new(0,624,0,51)}, Enum.EasingStyle.Quart)
+        else
+            Tween(BFFrame, 0.28, {Size = UDim2.new(0,624,0,374)}, Enum.EasingStyle.Quart)
+            task.wait(0.22)
+            BFBody.Visible = true
+        end
+    end)
+
+    local BFExitOverlay = MakeFrame(BFFrame, {BackgroundColor3 = Color3.new(0,0,0), Transparency = 1})
+    BFExitOverlay.Size = UDim2.new(1,0,1,0); BFExitOverlay.ZIndex = 200; BFExitOverlay.Visible = false
+    local BFExitBox = MakeFrame(BFExitOverlay, {BackgroundColor3 = BG_PANEL, Radius = 10})
+    BFExitBox.Size = UDim2.new(0,270,0,132); BFExitBox.Position = UDim2.new(0.5,-135,0.5,-66); BFExitBox.ZIndex = 201
+    MakeStroke(BFExitBox, BORDER_CLR, 1, 0.1)
+    MakeLabel(BFExitBox, {
+        Text = "Close Diamond Hub?", TextSize = 15, Font = Enum.Font.GothamBold,
+        Size = UDim2.new(1,0,0,52), Position = UDim2.new(0,0,0,8),
+    }).ZIndex = 202
+    local BFExitYes = MakeButton(BFExitBox, {
+        Text = "Close", BackgroundColor3 = Color3.fromRGB(190,45,55),
+        Size = UDim2.new(0,96,0,34), Position = UDim2.new(0,14,0,74), TextSize = 13,
+    }); BFExitYes.ZIndex = 202
+    local BFExitNo = MakeButton(BFExitBox, {
+        Text = "Cancel", BackgroundColor3 = BG_ITEM,
+        Size = UDim2.new(0,96,0,34), Position = UDim2.new(1,-110,0,74), TextSize = 13,
+    }); BFExitNo.ZIndex = 202
+    BFCloseBtn.MouseButton1Click:Connect(function()
+        BFExitOverlay.Visible = true
+        Tween(BFExitOverlay, 0.18, {BackgroundTransparency = 0.5})
+    end)
+    BFExitNo.MouseButton1Click:Connect(function()
+        Tween(BFExitOverlay, 0.15, {BackgroundTransparency = 1})
+        task.wait(0.15); BFExitOverlay.Visible = false
+    end)
+    BFExitYes.MouseButton1Click:Connect(function()
+        getgenv().DiamondHub_Active = false
+        getgenv().DiamondHub_Loaded = false
+        ScreenGui:Destroy()
+    end)
+
+    --// ─── BF ENGINE LOOPS ─────────────────────────────────────────
+
+    local function BF_FindTarget(nameList)
+        local nearest, bestDist = nil, math.huge
+        local char = LocalPlayer.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
+        local myPos = char.HumanoidRootPart.Position
+        -- Build a set of all player character models so they are never targeted
+        local playerChars = {}
+        for _, plr in pairs(game:GetService("Players"):GetPlayers()) do
+            if plr.Character then playerChars[plr.Character] = true end
+        end
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("Model") and obj ~= char and not playerChars[obj] then
+                local hum  = obj:FindFirstChildOfClass("Humanoid")
+                local root = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Torso")
+                if hum and root and hum.Health > 0 then
+                    local pass = (nameList == nil)
+                    if not pass then
+                        local low = obj.Name:lower()
+                        for _, n in ipairs(nameList) do
+                            if low:find(n:lower(), 1, true) then pass = true; break end
+                        end
+                    end
+                    if pass then
+                        local d = (myPos - root.Position).Magnitude
+                        if d < bestDist then bestDist = d; nearest = root end
+                    end
+                end
+            end
+        end
+        return nearest
+    end
+
+    local function BF_TeleportTo(root)
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") and root and root.Parent then
+            char.HumanoidRootPart.CFrame = root.CFrame * CFrame.new(0,0,-4)
+        end
+    end
+
+    local function BF_EquipWeapon(wType)
+        pcall(function()
+            local char = LocalPlayer.Character
+            local hum  = char and char:FindFirstChildOfClass("Humanoid")
+            if not hum then return end
+            for _, tool in pairs(LocalPlayer.Backpack:GetChildren()) do
+                if tool:IsA("Tool") then
+                    local n = tool.Name:lower()
+                    local match = (wType == "Sword" and (n:find("sword",1,true) or n:find("blade",1,true) or n:find("katana",1,true) or n:find("saber",1,true)))
+                               or ((wType == "Fruit" or wType == "Blox Fruit") and (n:find("fruit",1,true) or n:find("devil",1,true)))
+                               or  wType == "Melee"
+                    if match then hum:EquipTool(tool); return end
+                end
+            end
+        end)
+    end
+
+    -- Shared current target + attack helper
+    local BF_CurTarget = nil
+
+    local function BF_Attack(root)
+        pcall(function()
+            local char = LocalPlayer.Character
+            if not char then return end
+            for _, item in pairs(char:GetChildren()) do
+                if item:IsA("Tool") then
+                    pcall(function() item:Activate() end)
+                    local handle = item:FindFirstChild("Handle")
+                    if handle and root and root.Parent then
+                        if firetouchinterest then
+                            firetouchinterest(handle, root.Parent, 0)
+                            firetouchinterest(handle, root.Parent, 1)
+                        end
+                    end
+                    break
+                end
+            end
+            if root and root.Parent then
+                local cd = root.Parent:FindFirstChildOfClass("ClickDetector")
+                        or root:FindFirstChildOfClass("ClickDetector")
+                if cd and fireclickdetector then
+                    pcall(function() fireclickdetector(cd) end)
+                end
+            end
+        end)
+    end
+
+    -- NPC name → boss/material lookup tables
+    local BF_MatMap = {
+        ["Dragon Scales"]   = {"Dragon Crew"},
+        ["Scrap Metal"]     = {"Pirate","Bandit"},
+        ["Magma Ore"]       = {"Military Soldier","Military Spy","Magma Ninja"},
+        ["Vampire Fangs"]   = {"Vampire"},
+        ["Leather"]         = {"Pirate","Monkey","Bandit"},
+        ["Angel Wings"]     = {"Sky Bandit","Sky Pirate","Blimp Pirate"},
+        ["Dark Fragment"]   = {"Darkbeard"},
+        ["Leviathan Heart"] = {"Leviathan"},
+    }
+
+    -- Throttled target scan (every 0.5s) — avoids per-frame workspace:GetDescendants()
+    local BF_ScanTimer = 0
+    table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
+        if not getgenv().DiamondHub_Active then return end
+        if not BFFrame.Visible then return end
+        local farmOn = _G.BF_Config.AutoFarm or _G.BF_Config.AutoBones or
+                       _G.BF_Config.AutoMaterial or _G.BF_Config.AutoBoss or _G.BF_Config.AutoMastery
+        if not farmOn then BF_CurTarget = nil; return end
+        BF_ScanTimer = BF_ScanTimer + dt
+        if BF_ScanTimer < 0.5 then return end
+        BF_ScanTimer = 0
+        -- Equip weapon for active farm mode
+        if _G.BF_Config.AutoFarm then
+            BF_EquipWeapon(_G.BF_Config.AutoFarmWeapon)
+        elseif _G.BF_Config.AutoMastery then
+            BF_EquipWeapon(_G.BF_Config.MasteryType)
+        end
+        -- Find a target matching the active farm mode
+        local t = nil
+        if _G.BF_Config.AutoFarm or _G.BF_Config.AutoMastery then
+            t = BF_FindTarget(nil)
+        elseif _G.BF_Config.AutoBones then
+            t = BF_FindTarget({"Living Zombie","Demonic Soul","Possessed Mummy","Vampire"})
+        elseif _G.BF_Config.AutoMaterial then
+            local matKey = _G.BF_Config.SelectedMaterial:match("^([^%(]+)")
+            if matKey then matKey = matKey:gsub("%s+$","") end
+            t = BF_FindTarget(matKey and BF_MatMap[matKey])
+        elseif _G.BF_Config.AutoBoss then
+            local raw  = _G.BF_Config.SelectedBoss
+            local name = raw:match("^([^%(/]+)"); if name then name = name:gsub("%s+$","") end
+            if name then t = BF_FindTarget({name}) end
+        end
+        BF_CurTarget = t
+    end))
+
+    -- Teleport loop — every frame, no scan, just move character to cached target
+    table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function()
+        if not getgenv().DiamondHub_Active then return end
+        if not BFFrame.Visible then return end
+        if BF_CurTarget and BF_CurTarget.Parent then
+            BF_TeleportTo(BF_CurTarget)
+        end
+    end))
+
+    -- Attack loop — throttled to 0.15s
+    local attackTimer = 0
+    table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
+        if not getgenv().DiamondHub_Active then return end
+        if not BFFrame.Visible then return end
+        attackTimer = attackTimer + dt
+        if attackTimer < 0.15 then return end
+        attackTimer = 0
+        if BF_CurTarget and BF_CurTarget.Parent then
+            BF_Attack(BF_CurTarget)
+        end
+    end))
+
+    -- Auto stats (throttled 0.5s)
+    local statsTimer = 0
+    table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
+        if not getgenv().DiamondHub_Active then return end
+        if not BFFrame.Visible then return end
+        statsTimer = statsTimer + dt
+        if statsTimer < 0.5 then return end
+        statsTimer = 0
+        local statMap = {
+            AutoStats_Melee="Melee", AutoStats_Defense="Defense",
+            AutoStats_Sword="Sword", AutoStats_Gun="Gun", AutoStats_Fruit="Blox Fruit",
+        }
+        for k, v in pairs(statMap) do
+            if _G.BF_Config[k] then
+                pcall(function()
+                    local RS  = game:GetService("ReplicatedStorage")
+                    local rem = RS:FindFirstChild("Remotes") and RS.Remotes:FindFirstChild("CommF_")
+                    if rem then rem:InvokeServer("addStat", v) end
+                end)
+            end
+        end
+    end))
+
+    -- ESP
+    table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function()
+        if not getgenv().DiamondHub_Active then return end
+        if not BFFrame.Visible then return end
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character then
+                pcall(function()
+                    local h = p.Character:FindFirstChild("BF_ESP")
+                            or Instance.new("Highlight", p.Character)
+                    h.Name = "BF_ESP"; h.Enabled = _G.BF_Config.ESP
+                    h.FillColor = Color3.fromRGB(255,200,0)
+                    h.OutlineColor = Color3.fromRGB(255,255,0)
+                end)
+            end
+        end
+    end))
+
+    -- Fruit notifier (throttled 2s)
+    local fruitTimer = 0
+    table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
+        if not getgenv().DiamondHub_Active then return end
+        if not BFFrame.Visible or not _G.BF_Config.FruitNotifier then return end
+        fruitTimer = fruitTimer + dt
+        if fruitTimer < 2 then return end
+        fruitTimer = 0
+        pcall(function()
+            for _, obj in pairs(workspace:GetDescendants()) do
+                local n = obj.Name:lower()
+                if (n:find("fruit",1,true) or n:find("devil fruit",1,true))
+                and obj:FindFirstChildOfClass("ClickDetector") then
+                    local part = obj:IsA("BasePart") and obj
+                             or (obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")))
+                    if part then
+                        warn("[Diamond Hub] Fruit spotted: " .. obj.Name)
+                        local char = LocalPlayer.Character
+                        if char and char:FindFirstChild("HumanoidRootPart") then
+                            char.HumanoidRootPart.CFrame = CFrame.new(part.Position + Vector3.new(0,4,0))
+                        end
+                        break
+                    end
+                end
+            end
+        end)
+    end))
+
+    --// ============================================================
     --//  NAVIGATION
     --// ============================================================
+
+    local function ShowBloxFruits()
+        HubFrame.Visible = false
+        GameLoadFrame.Visible = true
+        GameLoadTitle.Text = "Loading Blox Fruits"
+        GameLoadSub.Text   = "Initializing scripts..."
+        GameLoadBar_Fill.Size = UDim2.new(0,0,1,0)
+        Tween(GameLoadBar_Fill, 1.4, {Size = UDim2.new(1,0,1,0)}, Enum.EasingStyle.Quart)
+        task.wait(1.6)
+        if not getgenv().DiamondHub_Active then return end
+        GameLoadFrame.Visible = false
+        BFMinimized = false
+        BFFrame.Size  = UDim2.new(0,624,0,374)
+        BFBody.Visible = true
+        BFFrame.Visible = true
+        BFFrame.BackgroundTransparency = 1
+        Tween(BFFrame, 0.32, {BackgroundTransparency = 0}, Enum.EasingStyle.Quad)
+    end
 
     local function ShowRivals()
         HubFrame.Visible = false
@@ -1304,29 +2155,17 @@ local success, err = pcall(function()
 
     local function ShowHub()
         RivalsFrame.Visible = false
+        BFFrame.Visible     = false
         HubFrame.Visible    = true
         HubFrame.BackgroundTransparency = 1
         Tween(HubFrame, 0.28, {BackgroundTransparency = 0}, Enum.EasingStyle.Quad)
     end
 
     BackBtn.MouseButton1Click:Connect(ShowHub)
+    BFBackBtn.MouseButton1Click:Connect(ShowHub)
 
-    -- Register Rivals game card
-    AddGameCard("Rivals", "Combat sports — PvP scripts", "PVP", function()
-        ShowRivals()
-    end)
-
-    -- "More coming soon" placeholder
-    local MoreCard = MakeFrame(GamesScroll, {BackgroundColor3 = Color3.fromRGB(18,18,22), Radius = 9})
-    MoreCard.Size = UDim2.new(1,0,0,48)
-    MakeStroke(MoreCard, BORDER_CLR, 1, 0.4)
-    MakeLabel(MoreCard, {
-        Text = "More games coming soon...",
-        TextSize = 12,
-        Font = Enum.Font.GothamMedium,
-        TextColor3 = TEXT_MUTED,
-        Size = UDim2.new(1,0,1,0),
-    })
+    AddGameCard("Rivals",      "Combat sports — PvP scripts",       "PVP", ShowRivals)
+    AddGameCard("Blox Fruits", "Open-world adventure — Autofarm",   "RPG", ShowBloxFruits)
 
     --// ============================================================
     --//  STARTUP SEQUENCE: Loading → Hub
