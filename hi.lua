@@ -2096,19 +2096,15 @@ local success, err = pcall(function()
         ["Leviathan"]               = CFrame.new(-13234, 332, -7625),
     }
 
-    -- Cooldown-aware island teleport: only fires once every 5s, lifts the player
-    -- a few studs so they don't clip terrain and fall to the void. Without the
-    -- cooldown the scan loop teleports every 0.5s which causes the
-    -- "TP to sky → fall → respawn → TP to sky" loop the user reported.
+    -- Set destination for the smooth-fly loop below. Cooldown prevents the
+    -- scan loop (runs every 0.5s) from spamming new destinations before the
+    -- character has had time to arrive.
     local BF_GoToCooldown = 0
     local function BF_GoTo(cf)
         if not cf then return end
         if tick() < BF_GoToCooldown then return end
-        BF_GoToCooldown = tick() + 5
-        local char = LocalPlayer.Character
-        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-        hrp.CFrame = CFrame.new(cf.Position + Vector3.new(0, 8, 0))
+        BF_GoToCooldown = tick() + 12   -- 12s: plenty of flight time to reach any island
+        BF_Destination = cf
     end
 
     -- Find a boss anywhere in workspace (bosses spawn outside Enemies sometimes)
@@ -2173,7 +2169,8 @@ local success, err = pcall(function()
     end
 
     -- Attack: fire touch interest from held tool's Handle into the target HRP, then activate
-    local BF_CurTarget = nil
+    local BF_CurTarget  = nil
+    local BF_Destination = nil  -- CFrame to fly toward when no target is locked
     local function BF_Attack(root)
         pcall(function()
             local char = LocalPlayer.Character
@@ -2211,7 +2208,7 @@ local success, err = pcall(function()
         if not BFFrame.Visible then return end
         local farmOn = _G.BF_Config.AutoFarm or _G.BF_Config.AutoBones or
                        _G.BF_Config.AutoMaterial or _G.BF_Config.AutoBoss or _G.BF_Config.AutoMastery
-        if not farmOn then BF_CurTarget = nil; BF_LastQuest = nil; return end
+        if not farmOn then BF_CurTarget = nil; BF_Destination = nil; BF_LastQuest = nil; return end
         BF_ScanTimer = BF_ScanTimer + dt
         if BF_ScanTimer < 0.5 then return end
         BF_ScanTimer = 0
@@ -2224,7 +2221,7 @@ local success, err = pcall(function()
             if q then
                 BF_StartQuest(q[1], q[2])
                 local t = BF_FindEnemy(q[5])
-                if t then BF_GoToCooldown = 0 else BF_GoTo(BF_QuestCFrame[q[1]]) end
+                if t then BF_GoToCooldown = 0; BF_Destination = nil else BF_GoTo(BF_QuestCFrame[q[1]]) end
                 BF_CurTarget = t
             end
             return
@@ -2244,7 +2241,7 @@ local success, err = pcall(function()
             for _, name in ipairs(BF_BoneMobs) do
                 t = BF_FindEnemy(name); if t then break end
             end
-            if t then BF_GoToCooldown = 0 else BF_GoTo(BF_QuestCFrame["HauntedQuest2"]) end
+            if t then BF_GoToCooldown = 0; BF_Destination = nil else BF_GoTo(BF_QuestCFrame["HauntedQuest2"]) end
             BF_CurTarget = t
             return
         end
@@ -2257,9 +2254,9 @@ local success, err = pcall(function()
             local mob = key and BF_MatMap[key]
             local t   = mob and BF_FindEnemy(mob) or nil
             if t then
-                BF_GoToCooldown = 0
+                BF_GoToCooldown = 0; BF_Destination = nil
             elseif mob then
-                -- Look up the quest that spawns this mob and teleport there
+                -- Look up the quest that spawns this mob and fly there
                 for _, q in ipairs(BF_Quests) do
                     if q[5] == mob and BF_QuestCFrame[q[1]] then
                         BF_GoTo(BF_QuestCFrame[q[1]]); break
@@ -2277,7 +2274,7 @@ local success, err = pcall(function()
             local name = raw:match("^([^%(/]+)"); if name then name = name:gsub("%s+$","") end
             local t = name and BF_FindBoss(name) or nil
             if t then
-                BF_GoToCooldown = 0
+                BF_GoToCooldown = 0; BF_Destination = nil
             elseif name and BF_BossCFrame[name] then
                 BF_GoTo(BF_BossCFrame[name])
             end
@@ -2286,12 +2283,48 @@ local success, err = pcall(function()
         end
     end))
 
-    -- Teleport loop (every frame, no scan)
-    table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function()
+    -- Movement loop (every frame):
+    --   • When a combat target is locked → stick on top of it (instant, short range)
+    --   • When flying to an island       → smooth lerp at 250 studs/s, noclip while moving
+    table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
         if not getgenv().DiamondHub_Active then return end
         if not BFFrame.Visible then return end
+
+        local char = LocalPlayer.Character
+        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        -- Priority 1: stick to combat target
         if BF_CurTarget and BF_CurTarget.Parent then
             BF_TeleportTo(BF_CurTarget)
+            return
+        end
+
+        -- Priority 2: fly to island destination
+        if BF_Destination then
+            -- Noclip all character parts so we don't catch on geometry mid-flight
+            for _, p in pairs(char:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = false end
+            end
+
+            local dest    = BF_Destination.Position + Vector3.new(0, 50, 0)  -- fly above island
+            local current = hrp.Position
+            local dir     = dest - current
+            local dist    = dir.Magnitude
+
+            if dist < 25 then
+                -- Arrived — land at island height, re-enable collision, clear destination
+                hrp.CFrame  = CFrame.new(BF_Destination.Position + Vector3.new(0, 8, 0))
+                for _, p in pairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") then p.CanCollide = true end
+                end
+                BF_Destination   = nil
+                BF_GoToCooldown  = 0   -- allow an immediate scan on next tick
+            else
+                -- Move at 250 studs/s toward the elevated waypoint
+                local step = math.min(250 * dt, dist)
+                hrp.CFrame = CFrame.new(current + dir.Unit * step)
+            end
         end
     end))
 
