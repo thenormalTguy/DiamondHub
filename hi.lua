@@ -2202,13 +2202,15 @@ local success, err = pcall(function()
         return nearest
     end
 
-    -- Tween-based movement (server-friendly). Writing hrp.CFrame every
-    -- Heartbeat (60 Hz) trips Blox Fruits' anti-cheat, which respawns the
-    -- player at a random sky position as punishment. TweenService animates
-    -- the HRP smoothly and the server tolerates it.
-    local BF_CurTween     = nil   -- the currently-playing Tween
-    local BF_TweenTarget  = nil   -- Vector3 the current tween is heading to
-    local BF_NoclipConn   = nil   -- Stepped connection that sets all parts CanCollide=false
+    -- Physics-based movement. ANY CFrame write (direct or via TweenService)
+    -- is rejected by BF's server-side anti-cheat — symptom is "go fast then
+    -- snap back to original spot". BodyVelocity goes through normal physics
+    -- and the server accepts it within a sane speed envelope (~60 studs/s).
+    local BF_BodyVel      = nil   -- BodyVelocity instance attached to HRP
+    local BF_BodyGyro     = nil   -- BodyGyro to keep us upright
+    local BF_FlyTarget    = nil   -- Vector3 destination
+    local BF_FlyConn      = nil   -- Heartbeat conn that updates velocity
+    local BF_NoclipConn   = nil   -- Stepped conn that sets parts CanCollide=false
 
     -- Debug flag (set _G.BF_Debug = true in console to enable). Throttled to
     -- only fire warnings on CHANGES (target/destination), not every scan tick.
@@ -2267,49 +2269,73 @@ local success, err = pcall(function()
         if hum then pcall(function() hum.PlatformStand = false end) end
     end
 
+    -- BodyVelocity-based mover. Speed capped at BF_MAX_SPEED (60 studs/s,
+    -- which is well inside what BF's server tolerates without rollback).
+    local BF_MAX_SPEED = 60
+
     local function BF_StopTween()
-        if BF_CurTween then
-            pcall(function() BF_CurTween:Cancel() end)
-            BF_CurTween = nil
-        end
-        BF_TweenTarget = nil
+        if BF_FlyConn then BF_FlyConn:Disconnect(); BF_FlyConn = nil end
+        if BF_BodyVel  then pcall(function() BF_BodyVel:Destroy()  end); BF_BodyVel  = nil end
+        if BF_BodyGyro then pcall(function() BF_BodyGyro:Destroy() end); BF_BodyGyro = nil end
+        BF_FlyTarget = nil
         BF_SetPlatformStand(false)
         BF_SetNoclip(false)
     end
+
+    local function BF_EnsureMovers(hrp)
+        if not BF_BodyVel or BF_BodyVel.Parent ~= hrp then
+            if BF_BodyVel then pcall(function() BF_BodyVel:Destroy() end) end
+            BF_BodyVel = Instance.new("BodyVelocity")
+            BF_BodyVel.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+            BF_BodyVel.P        = 1250
+            BF_BodyVel.Velocity = Vector3.new(0, 0, 0)
+            BF_BodyVel.Parent   = hrp
+        end
+        if not BF_BodyGyro or BF_BodyGyro.Parent ~= hrp then
+            if BF_BodyGyro then pcall(function() BF_BodyGyro:Destroy() end) end
+            BF_BodyGyro = Instance.new("BodyGyro")
+            BF_BodyGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+            BF_BodyGyro.P         = 9000
+            BF_BodyGyro.D         = 1000
+            BF_BodyGyro.CFrame    = hrp.CFrame
+            BF_BodyGyro.Parent    = hrp
+        end
+    end
+
+    -- Move toward targetPos at <= speed studs/s using BodyVelocity. Idempotent.
     local function BF_TweenTo(targetPos, speed)
         local char = LocalPlayer.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp or not targetPos then return end
-        -- Already heading to this exact spot? Don't restart.
-        if BF_TweenTarget and (BF_TweenTarget - targetPos).Magnitude < 2
-           and BF_CurTween and BF_CurTween.PlaybackState == Enum.PlaybackState.Playing then
-            return
-        end
-        if BF_CurTween then pcall(function() BF_CurTween:Cancel() end); BF_CurTween = nil end
-        -- NOTE: We intentionally do NOT use PlatformStand any more. It puts
-        -- the Humanoid in a ragdoll pose which BF's anti-cheat (and server
-        -- automod) flags instantly. A plain tween at sane walking/sprint
-        -- speed reads to the server like normal movement.
+        BF_FlyTarget = targetPos
         BF_SetNoclip(true)
-        local dist = (hrp.Position - targetPos).Magnitude
-        -- Cap speed at human-believable values (defaults to ~80 studs/s ≈ a
-        -- modest sprint). Minimum tween time bumped to 0.3s so we never
-        -- *snap* to a position even when right next to it.
-        -- IMPORTANT: do NOT cap the upper bound here. A low ceiling
-        -- (e.g. 12s) silently turned long trips into ~400 stud/s teleports
-        -- — that was the "still super fast" complaint. Only enforce a
-        -- minimum so we never instant-snap.
-        local sp   = math.min(speed or 80, 120)
-        local time = math.max(dist / sp, 0.3)
-        local info = TweenInfo.new(time, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
-        BF_CurTween    = TweenService:Create(hrp, info, {CFrame = CFrame.new(targetPos)})
-        BF_TweenTarget = targetPos
-        BF_CurTween:Play()
+        BF_EnsureMovers(hrp)
+
+        local sp = math.min(speed or BF_MAX_SPEED, BF_MAX_SPEED)
+
+        if BF_FlyConn then return end -- already running
+        BF_FlyConn = RunService.Heartbeat:Connect(function()
+            local ch = LocalPlayer.Character
+            local h  = ch and ch:FindFirstChild("HumanoidRootPart")
+            if not h or not BF_FlyTarget then
+                if BF_BodyVel then BF_BodyVel.Velocity = Vector3.new(0,0,0) end
+                return
+            end
+            -- Re-parent if character respawned
+            if BF_BodyVel.Parent ~= h then BF_EnsureMovers(h) end
+            local diff = BF_FlyTarget - h.Position
+            local d    = diff.Magnitude
+            if d < 4 then
+                BF_BodyVel.Velocity = Vector3.new(0, 0, 0)
+                return
+            end
+            BF_BodyVel.Velocity = diff.Unit * sp
+            BF_BodyGyro.CFrame  = CFrame.new(h.Position, h.Position + Vector3.new(diff.X, 0, diff.Z))
+        end)
     end
 
-    -- Combat lock: tween onto the mob continuously (short hops keep us in range
-    -- as the mob moves). Approach from a small offset (not directly on top)
-    -- and at walking speed so the server doesn't see a teleport.
+    -- Combat lock: hover next to the mob (6 studs offset on the player's
+    -- current side, 2 studs above) at modest speed.
     local function BF_TeleportTo(root)
         if not root or not root.Parent then return end
         local char = LocalPlayer.Character
@@ -2318,7 +2344,7 @@ local success, err = pcall(function()
         local dir  = (hrp.Position - root.Position)
         if dir.Magnitude < 0.1 then dir = Vector3.new(1, 0, 0) end
         local off  = dir.Unit * 6 + Vector3.new(0, 2, 0)
-        BF_TweenTo(root.Position + off, 80)
+        BF_TweenTo(root.Position + off, BF_MAX_SPEED)
     end
 
     -- Equip weapon by ToolTip (BF tools set ToolTip = "Melee", "Sword", or "Blox Fruit")
