@@ -2312,16 +2312,22 @@ local success, err = pcall(function()
     end
 
     -- COMBAT lock. NEVER write hrp.CFrame directly — BF's server rejects it
-    -- and rolls us back, which on bosses turns into a TP-back-and-forth
-    -- ping-pong that ultimately gets the player kicked.
+    -- and rolls us back, which turns into a TP-back-and-forth ping-pong
+    -- that ultimately gets the player kicked.
     -- Strategy:
-    --   • FAR  (> 200 studs)  → tween at travel speed to a point just above
-    --                           the mob; let the next tick re-evaluate.
-    --   • NEAR (≤ 200 studs)  → very short tween (0.18s linear) onto the
-    --                           mob's CFrame * (0, 3, 5). Fast enough to
-    --                           track movement, smooth enough that the
-    --                           server treats it as legitimate motion.
-    local BF_COMBAT_RANGE = 200
+    --   • FAR  (> BF_COMBAT_RANGE)  → route through the travel tween at
+    --                                 BF_TRAVEL_SPEED. Don't try to "snap"
+    --                                 onto a mob from across the island.
+    --   • NEAR (≤ BF_COMBAT_RANGE)  → distance-scaled tween at
+    --                                 BF_COMBAT_SPEED studs/sec, with a
+    --                                 floor of 0.12s. This eliminates the
+    --                                 1000+ stud/sec velocity spike that
+    --                                 was tripping anti-cheat.
+    --   • Idempotent: if the new combat destination is within 4 studs of
+    --                 the in-flight tween's destination (mob barely moved),
+    --                 don't restart the tween.
+    local BF_COMBAT_RANGE = 60     -- studs; was 200 (way past sword reach)
+    local BF_COMBAT_SPEED = 220    -- studs/sec; well inside BF's tolerance
     local function BF_TeleportTo(root)
         if not root or not root.Parent then return end
         local char = LocalPlayer.Character
@@ -2334,13 +2340,21 @@ local success, err = pcall(function()
             BF_TweenTo(targetPos + Vector3.new(0, 5, 0), BF_TRAVEL_SPEED)
             return
         end
-        -- Cancel any in-flight travel tween and start a fresh short combat tween.
+        local destCF = root.CFrame * CFrame.new(0, 3, 5)
+        -- Idempotent guard — same as travel tween. Prevents the 4-Hz scan
+        -- + movement loop from constantly cancel/restarting onto a mob
+        -- that's only twitching a few studs (which looked like teleport
+        -- spam to anti-cheat).
+        if BF_TweenTarget and (BF_TweenTarget - destCF.Position).Magnitude < 4
+           and BF_CurTween and BF_CurTween.PlaybackState == Enum.PlaybackState.Playing then
+            return
+        end
         if BF_CurTween then pcall(function() BF_CurTween:Cancel() end); BF_CurTween = nil end
-        local destCF   = root.CFrame * CFrame.new(0, 3, 5)
+        local time = math.max(dist / BF_COMBAT_SPEED, 0.12)
         BF_TweenTarget = destCF.Position
         BF_CurTween    = TweenService:Create(
             hrp,
-            TweenInfo.new(0.18, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+            TweenInfo.new(time, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
             {CFrame = destCF}
         )
         BF_CurTween:Play()
@@ -2407,6 +2421,24 @@ local success, err = pcall(function()
     -- Bones drop from undead enemies (Third Sea Haunted Castle)
     local BF_BoneMobs = {"Reborn Skeleton","Living Zombie","Demonic Soul","Possessed Mummy"}
 
+    -- Tracks the currently-active farm mode so sticky targeting clears
+    -- when the user switches modes (see scan loop below).
+    local BF_LastMode = nil
+
+    -- Sticky-target helper. Returns true if BF_CurTarget is still a valid,
+    -- alive mob. Sticky targeting prevents the scan loop from flipping
+    -- between mobs every 0.5s — each flip used to cancel + restart the
+    -- combat tween with a new destination, which looked like teleport
+    -- spam to BF's anti-cheat and got the player kicked.
+    local function BF_TargetAlive()
+        local root = BF_CurTarget
+        if not root or not root.Parent then return false end
+        local mob = root.Parent
+        local hum = mob:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then return false end
+        return true
+    end
+
     -- Throttled target scan (every 0.5s)
     local BF_ScanTimer = 0
     table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
@@ -2424,6 +2456,24 @@ local success, err = pcall(function()
         if BF_ScanTimer < 0.5 then return end
         BF_ScanTimer = 0
 
+        -- Detect mode switch (e.g. user toggled off AutoFarm and turned on
+        -- AutoBoss). Sticky targeting must NOT carry an old mob across
+        -- modes — otherwise the new mode keeps chasing the old target
+        -- until it dies, which feels broken to the user.
+        local mode = (_G.BF_Config.AutoFarm and "Farm")
+                  or (_G.BF_Config.AutoMastery and "Mastery")
+                  or (_G.BF_Config.AutoBones   and "Bones")
+                  or (_G.BF_Config.AutoMaterial and "Material")
+                  or (_G.BF_Config.AutoBoss    and "Boss")
+        if mode ~= BF_LastMode then
+            BF_CurTarget = nil
+            BF_LastMode  = mode
+        end
+
+        -- Sticky targeting: keep the current target until it's dead.
+        -- Only when the existing target is gone do we acquire a new one.
+        local sticky = BF_TargetAlive()
+
         -- Auto Farm Level: pick quest by player level, start quest, hunt that mob
         -- (teleports to quest island if mob not loaded near us)
         if _G.BF_Config.AutoFarm then
@@ -2431,7 +2481,7 @@ local success, err = pcall(function()
             local q = BF_QuestForLevel(BF_PlayerLevel())
             if q then
                 BF_StartQuest(q[1], q[2])
-                local t = BF_FindEnemy(q[5])
+                local t = sticky and BF_CurTarget or BF_FindEnemy(q[5])
                 if t then BF_Destination = nil else BF_GoTo(BF_QuestCFrame[q[1]]) end
                 BF_CurTarget = t
                 BF_DbgScan("Level", q[1], BF_Destination and BF_Destination.Position or nil, q[5], t ~= nil)
@@ -2444,7 +2494,7 @@ local success, err = pcall(function()
         -- Auto Farm Mastery: hunt any nearby enemy with selected mastery weapon
         if _G.BF_Config.AutoMastery then
             BF_EquipWeapon(_G.BF_Config.MasteryType)
-            BF_CurTarget = BF_FindEnemy(nil)
+            BF_CurTarget = sticky and BF_CurTarget or BF_FindEnemy(nil)
             BF_DbgScan("Mastery", nil, nil, "<any>", BF_CurTarget ~= nil)
             return
         end
@@ -2453,8 +2503,12 @@ local success, err = pcall(function()
         if _G.BF_Config.AutoBones then
             BF_EquipWeapon(_G.BF_Config.AutoFarmWeapon)
             local t, mobFound = nil, nil
-            for _, name in ipairs(BF_BoneMobs) do
-                t = BF_FindEnemy(name); if t then mobFound = name; break end
+            if sticky then
+                t = BF_CurTarget
+            else
+                for _, name in ipairs(BF_BoneMobs) do
+                    t = BF_FindEnemy(name); if t then mobFound = name; break end
+                end
             end
             if t then BF_Destination = nil else BF_GoTo(BF_QuestCFrame["HauntedQuest2"]) end
             BF_CurTarget = t
@@ -2468,7 +2522,7 @@ local success, err = pcall(function()
             local key = _G.BF_Config.SelectedMaterial:match("^([^%(]+)")
             if key then key = key:gsub("%s+$","") end
             local mob = key and BF_MatMap[key]
-            local t   = mob and BF_FindEnemy(mob) or nil
+            local t   = sticky and BF_CurTarget or (mob and BF_FindEnemy(mob)) or nil
             local questKey = nil
             if t then
                 BF_Destination = nil
@@ -2489,7 +2543,7 @@ local success, err = pcall(function()
             BF_EquipWeapon(_G.BF_Config.AutoFarmWeapon)
             local raw  = _G.BF_Config.SelectedBoss
             local name = raw:match("^([^%(/]+)"); if name then name = name:gsub("%s+$","") end
-            local t = name and BF_FindBoss(name) or nil
+            local t = sticky and BF_CurTarget or (name and BF_FindBoss(name)) or nil
             if t then
                 BF_Destination = nil
             elseif name and BF_BossCFrame[name] then
