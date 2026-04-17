@@ -2311,14 +2311,16 @@ local success, err = pcall(function()
         BF_CurTween:Play()
     end
 
-    -- COMBAT lock. CRITICAL distance gate:
-    --   • If the mob is < BF_COMBAT_RANGE (200 studs), snap CFrame onto it.
-    --     Close-range writes are accepted by the server.
-    --   • If the mob is FAR (e.g. we're mid-flight over water and the scan
-    --     loop just locked onto a streamed mob from another island), do NOT
-    --     snap — the server will roll us back into the water. Tween to the
-    --     mob at travel speed instead. Once we're inside combat range the
-    --     next tick will snap us in cleanly.
+    -- COMBAT lock. NEVER write hrp.CFrame directly — BF's server rejects it
+    -- and rolls us back, which on bosses turns into a TP-back-and-forth
+    -- ping-pong that ultimately gets the player kicked.
+    -- Strategy:
+    --   • FAR  (> 200 studs)  → tween at travel speed to a point just above
+    --                           the mob; let the next tick re-evaluate.
+    --   • NEAR (≤ 200 studs)  → very short tween (0.18s linear) onto the
+    --                           mob's CFrame * (0, 3, 5). Fast enough to
+    --                           track movement, smooth enough that the
+    --                           server treats it as legitimate motion.
     local BF_COMBAT_RANGE = 200
     local function BF_TeleportTo(root)
         if not root or not root.Parent then return end
@@ -2329,18 +2331,19 @@ local success, err = pcall(function()
         local targetPos = root.Position
         local dist      = (hrp.Position - targetPos).Magnitude
         if dist > BF_COMBAT_RANGE then
-            -- Too far for a safe direct write — tween there like a destination.
             BF_TweenTo(targetPos + Vector3.new(0, 5, 0), BF_TRAVEL_SPEED)
             return
         end
-        -- In range → cancel any travel tween and snap onto the mob.
-        if BF_CurTween then
-            pcall(function() BF_CurTween:Cancel() end); BF_CurTween = nil
-        end
-        BF_TweenTarget = nil
-        pcall(function()
-            hrp.CFrame = root.CFrame * CFrame.new(0, 3, 5)
-        end)
+        -- Cancel any in-flight travel tween and start a fresh short combat tween.
+        if BF_CurTween then pcall(function() BF_CurTween:Cancel() end); BF_CurTween = nil end
+        local destCF   = root.CFrame * CFrame.new(0, 3, 5)
+        BF_TweenTarget = destCF.Position
+        BF_CurTween    = TweenService:Create(
+            hrp,
+            TweenInfo.new(0.18, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+            {CFrame = destCF}
+        )
+        BF_CurTween:Play()
     end
 
     -- Equip weapon by ToolTip (BF tools set ToolTip = "Melee", "Sword", or "Blox Fruit")
