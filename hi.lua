@@ -1891,8 +1891,8 @@ local success, err = pcall(function()
     --// ─── BF ENGINE LOOPS ─────────────────────────────────────────
 
     -- Real Blox Fruits remotes (CommF_ is the main game RemoteFunction)
-    local BF_Players = game:GetService("Players")
-    local BF_Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local BF_RS      = game:GetService("ReplicatedStorage")
+    local BF_Remotes = BF_RS:FindFirstChild("Remotes")
     local BF_CommF   = BF_Remotes and BF_Remotes:FindFirstChild("CommF_")
 
     -- Quest table: {questName, tier, minLv, maxLv, mobName, sea}
