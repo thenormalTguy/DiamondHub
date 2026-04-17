@@ -2146,27 +2146,14 @@ local success, err = pcall(function()
     -- assignment "BF_Destination = cf" to a global (because no local of that
     -- name is in scope yet), and the movement loop's later local-of-the-same-name
     -- reads nil forever — flight silently never triggers.
-    local BF_GoToCooldown = 0
     local BF_CurTarget    = nil
-    local BF_Destination  = nil   -- pending instant-teleport destination CFrame
-    local BF_LastLanded   = nil   -- last destination CFrame we successfully landed at
+    local BF_Destination  = nil   -- island CFrame to PIN the player at every frame
     local function BF_GoTo(cf)
-        if not cf then return end
-        if tick() < BF_GoToCooldown then return end
-        -- Same-destination suppression: if we just landed at this exact spot
-        -- and the player hasn't moved far from it, don't re-teleport.
-        if BF_LastLanded then
-            local char = LocalPlayer.Character
-            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-            local sameSpot = (cf.Position - BF_LastLanded.Position).Magnitude < 30
-            local stillThere = hrp and (hrp.Position - BF_LastLanded.Position).Magnitude < 60
-            if sameSpot and stillThere then
-                BF_GoToCooldown = tick() + 3   -- back off, try again in 3s
-                return
-            end
-        end
-        BF_GoToCooldown = tick() + 4   -- short cooldown so mobs can stream in
-        BF_Destination  = cf
+        -- Always overwrite. The movement loop pins the player to BF_Destination
+        -- every frame, so leaving it set keeps the player on the island while
+        -- mobs stream in. Once a mob loads within range, the scan loop sets
+        -- BF_CurTarget and clears BF_Destination, and combat lock takes over.
+        BF_Destination = cf
     end
 
     -- Find a boss anywhere in workspace (bosses spawn outside Enemies sometimes)
@@ -2193,11 +2180,15 @@ local success, err = pcall(function()
         return nearest
     end
 
+    -- Use ABSOLUTE position offset (no CFrame multiplication). Multiplying by
+    -- root.CFrame applies the mob's rotation to the offset — when a mob is
+    -- ragdolling/jumping/attacking its root tilts, and the player gets flung
+    -- sideways or skyward instead of standing next to it.
     local function BF_TeleportTo(root)
         local char = LocalPlayer.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
         if hrp and root and root.Parent then
-            hrp.CFrame = root.CFrame * CFrame.new(0, 2, -3)
+            hrp.CFrame = CFrame.new(root.Position + Vector3.new(0, 4, 0))
         end
     end
 
@@ -2282,7 +2273,7 @@ local success, err = pcall(function()
             if q then
                 BF_StartQuest(q[1], q[2])
                 local t = BF_FindEnemy(q[5])
-                if t then BF_GoToCooldown = 0; BF_Destination = nil else BF_GoTo(BF_QuestCFrame[q[1]]) end
+                if t then BF_Destination = nil else BF_GoTo(BF_QuestCFrame[q[1]]) end
                 BF_CurTarget = t
             end
             return
@@ -2302,7 +2293,7 @@ local success, err = pcall(function()
             for _, name in ipairs(BF_BoneMobs) do
                 t = BF_FindEnemy(name); if t then break end
             end
-            if t then BF_GoToCooldown = 0; BF_Destination = nil else BF_GoTo(BF_QuestCFrame["HauntedQuest2"]) end
+            if t then BF_Destination = nil else BF_GoTo(BF_QuestCFrame["HauntedQuest2"]) end
             BF_CurTarget = t
             return
         end
@@ -2315,7 +2306,7 @@ local success, err = pcall(function()
             local mob = key and BF_MatMap[key]
             local t   = mob and BF_FindEnemy(mob) or nil
             if t then
-                BF_GoToCooldown = 0; BF_Destination = nil
+                BF_Destination = nil
             elseif mob then
                 -- Look up the quest that spawns this mob and fly there
                 for _, q in ipairs(BF_Quests) do
@@ -2335,7 +2326,7 @@ local success, err = pcall(function()
             local name = raw:match("^([^%(/]+)"); if name then name = name:gsub("%s+$","") end
             local t = name and BF_FindBoss(name) or nil
             if t then
-                BF_GoToCooldown = 0; BF_Destination = nil
+                BF_Destination = nil
             elseif name and BF_BossCFrame[name] then
                 BF_GoTo(BF_BossCFrame[name])
             end
@@ -2344,37 +2335,39 @@ local success, err = pcall(function()
         end
     end))
 
-    -- Movement loop (every frame). Two responsibilities:
-    --   1. Combat target locked → stick on top of it
-    --   2. Pending island destination → INSTANT teleport (one CFrame write,
-    --      then clear). Smooth flight fights Roblox character physics — the
-    --      Humanoid keeps applying gravity while we tween up, so the char
-    --      "jumps high and stalls" instead of crossing the map. Every working
-    --      public BF script just teleports, which is what the game expects.
+    -- Movement loop (every frame). PINS the player to a position each frame:
+    --   1. Combat target locked → pin on top of the mob
+    --   2. Island destination set → pin on top of the landing pad (8 studs up)
     --
-    -- After the teleport we reset BF_LastQuest so the scan loop re-issues
-    -- StartQuest for the new island and the server streams quest mobs in.
+    -- Pinning every frame is required because a one-shot CFrame write is
+    -- immediately undone by Roblox character physics: gravity drops the
+    -- player off sky islands into the void, the server respawns them at
+    -- their spawn point ("original location"), and the cycle repeats —
+    -- which is exactly the "fly to sky then back to spawn, repeat" bug.
+    -- Continuous pinning holds the character on the pad until a mob streams
+    -- in within range and combat lock takes over.
     table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
         if not getgenv().DiamondHub_Active then return end
         if not BFFrame.Visible then return end
 
         local char = LocalPlayer.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        local hum  = char and char:FindFirstChildOfClass("Humanoid")
         if not hrp then return end
 
-        -- Priority 1: stick to combat target
+        -- Priority 1: pin to combat target
         if BF_CurTarget and BF_CurTarget.Parent then
             BF_TeleportTo(BF_CurTarget)
             return
         end
 
-        -- Priority 2: instant-teleport to pending island destination
+        -- Priority 2: pin to island destination (every frame)
         if BF_Destination then
             local landPos = BF_Destination.Position + Vector3.new(0, 8, 0)
-            hrp.CFrame    = CFrame.new(landPos)
-            BF_LastLanded = BF_Destination
-            BF_Destination = nil
-            BF_LastQuest  = nil   -- re-issue StartQuest now that we're at the island
+            -- Disable jump/walk physics while pinned so the Humanoid doesn't
+            -- fight our CFrame writes (no jump, no fall acceleration buildup).
+            if hum then hum.PlatformStand = false; hum.Jump = false end
+            hrp.CFrame = CFrame.new(landPos)
             return
         end
     end))
