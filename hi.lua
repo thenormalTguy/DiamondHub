@@ -2295,8 +2295,12 @@ local success, err = pcall(function()
         -- Cap speed at human-believable values (defaults to ~80 studs/s ≈ a
         -- modest sprint). Minimum tween time bumped to 0.3s so we never
         -- *snap* to a position even when right next to it.
+        -- IMPORTANT: do NOT cap the upper bound here. A low ceiling
+        -- (e.g. 12s) silently turned long trips into ~400 stud/s teleports
+        -- — that was the "still super fast" complaint. Only enforce a
+        -- minimum so we never instant-snap.
         local sp   = math.min(speed or 80, 120)
-        local time = math.clamp(dist / sp, 0.3, 12)
+        local time = math.max(dist / sp, 0.3)
         local info = TweenInfo.new(time, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
         BF_CurTween    = TweenService:Create(hrp, info, {CFrame = CFrame.new(targetPos)})
         BF_TweenTarget = targetPos
