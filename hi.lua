@@ -1992,17 +1992,18 @@ local success, err = pcall(function()
         end
     end
 
-    -- Find nearest enemy in workspace.Enemies (substring match — survives naming variants)
+    -- Find nearest enemy in workspace.Enemies — EXACT name match (BF mob model names
+    -- are exactly the friendly name, e.g. "Bandit", "Vampire"). Substring matching
+    -- caused the script to lock onto random nearby NPCs sharing a word.
     local function BF_FindEnemy(mobName)
         local enemies = workspace:FindFirstChild("Enemies")
         if not enemies then return nil end
         local char = LocalPlayer.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
         local myPos = char.HumanoidRootPart.Position
-        local low = mobName and mobName:lower() or nil
         local nearest, bestDist = nil, math.huge
         for _, mob in ipairs(enemies:GetChildren()) do
-            if mob:IsA("Model") and (not low or mob.Name:lower():find(low, 1, true)) then
+            if mob:IsA("Model") and (not mobName or mob.Name == mobName) then
                 local hum  = mob:FindFirstChildOfClass("Humanoid")
                 local root = mob:FindFirstChild("HumanoidRootPart")
                 if hum and root and hum.Health > 0 then
@@ -2095,11 +2096,19 @@ local success, err = pcall(function()
         ["Leviathan"]               = CFrame.new(-13234, 332, -7625),
     }
 
-    -- Helper: teleport to a CFrame (used as fallback when no target loaded yet)
+    -- Cooldown-aware island teleport: only fires once every 5s, lifts the player
+    -- a few studs so they don't clip terrain and fall to the void. Without the
+    -- cooldown the scan loop teleports every 0.5s which causes the
+    -- "TP to sky → fall → respawn → TP to sky" loop the user reported.
+    local BF_GoToCooldown = 0
     local function BF_GoTo(cf)
+        if not cf then return end
+        if tick() < BF_GoToCooldown then return end
+        BF_GoToCooldown = tick() + 5
         local char = LocalPlayer.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-        if hrp and cf then hrp.CFrame = cf end
+        if not hrp then return end
+        hrp.CFrame = CFrame.new(cf.Position + Vector3.new(0, 8, 0))
     end
 
     -- Find a boss anywhere in workspace (bosses spawn outside Enemies sometimes)
@@ -2215,7 +2224,7 @@ local success, err = pcall(function()
             if q then
                 BF_StartQuest(q[1], q[2])
                 local t = BF_FindEnemy(q[5])
-                if not t then BF_GoTo(BF_QuestCFrame[q[1]]) end
+                if t then BF_GoToCooldown = 0 else BF_GoTo(BF_QuestCFrame[q[1]]) end
                 BF_CurTarget = t
             end
             return
@@ -2235,7 +2244,7 @@ local success, err = pcall(function()
             for _, name in ipairs(BF_BoneMobs) do
                 t = BF_FindEnemy(name); if t then break end
             end
-            if not t then BF_GoTo(BF_QuestCFrame["HauntedQuest2"]) end
+            if t then BF_GoToCooldown = 0 else BF_GoTo(BF_QuestCFrame["HauntedQuest2"]) end
             BF_CurTarget = t
             return
         end
@@ -2247,8 +2256,10 @@ local success, err = pcall(function()
             if key then key = key:gsub("%s+$","") end
             local mob = key and BF_MatMap[key]
             local t   = mob and BF_FindEnemy(mob) or nil
-            if not t and mob then
-                -- Try to find which quest spawns this mob and teleport there
+            if t then
+                BF_GoToCooldown = 0
+            elseif mob then
+                -- Look up the quest that spawns this mob and teleport there
                 for _, q in ipairs(BF_Quests) do
                     if q[5] == mob and BF_QuestCFrame[q[1]] then
                         BF_GoTo(BF_QuestCFrame[q[1]]); break
@@ -2265,7 +2276,9 @@ local success, err = pcall(function()
             local raw  = _G.BF_Config.SelectedBoss
             local name = raw:match("^([^%(/]+)"); if name then name = name:gsub("%s+$","") end
             local t = name and BF_FindBoss(name) or nil
-            if not t and name and BF_BossCFrame[name] then
+            if t then
+                BF_GoToCooldown = 0
+            elseif name and BF_BossCFrame[name] then
                 BF_GoTo(BF_BossCFrame[name])
             end
             BF_CurTarget = t
