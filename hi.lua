@@ -2082,6 +2082,27 @@ local success, err = pcall(function()
         return nearest
     end
 
+    -- Find ANY mob with the given name anywhere in workspace.Enemies — no
+    -- distance limit. Used to dynamically discover the actual quest island
+    -- coordinates when the hardcoded BF_QuestCFrame entry is wrong/stale
+    -- (BF moves/renames quest islands across updates). As long as ANY player
+    -- on the server is keeping the mob alive, this finds the real location.
+    -- Returns the mob's HRP, or nil if no live instance exists in the world.
+    local function BF_FindMobAnywhere(mobName)
+        local enemies = workspace:FindFirstChild("Enemies")
+        if not enemies then return nil end
+        local needle = mobName and mobName:lower() or nil
+        if not needle then return nil end
+        for _, mob in ipairs(enemies:GetChildren()) do
+            if mob:IsA("Model") and mob.Name and mob.Name:lower():find(needle, 1, true) then
+                local hum  = mob:FindFirstChildOfClass("Humanoid")
+                local root = mob:FindFirstChild("HumanoidRootPart")
+                if hum and root and hum.Health > 0 then return root end
+            end
+        end
+        return nil
+    end
+
     -- Quest island spawn locations (teleport here if no quest mob is loaded near us)
     local BF_QuestCFrame = {
         ["BanditQuest1"]        = CFrame.new(1056,   16, 1547),
@@ -2121,6 +2142,20 @@ local success, err = pcall(function()
         ["CakeQuest2"]          = CFrame.new(-1812,  19,-11862),
         ["ChocQuest"]           = CFrame.new(-12702,332,-7570),
     }
+
+    -- Resolve the travel CFrame for a quest. Prefer the live mob's actual
+    -- position (always correct, self-healing against stale/wrong coords).
+    -- Fall back to the hardcoded BF_QuestCFrame entry only if no live
+    -- instance of the mob exists anywhere on the server.
+    local function BF_QuestDestination(questKey, mobName)
+        local live = mobName and BF_FindMobAnywhere(mobName)
+        if live then
+            -- Aim 6 studs in front of and 4 above the mob so we land
+            -- on the island floor next to it, not inside it.
+            return live.CFrame * CFrame.new(0, 4, -6)
+        end
+        return BF_QuestCFrame[questKey]
+    end
 
     -- Boss spawn locations
     local BF_BossCFrame = {
@@ -2478,7 +2513,7 @@ local success, err = pcall(function()
             if q then
                 BF_StartQuest(q[1], q[2])
                 local t = sticky and BF_CurTarget or BF_FindEnemy(q[5])
-                if t then BF_Destination = nil else BF_GoTo(BF_QuestCFrame[q[1]]) end
+                if t then BF_Destination = nil else BF_GoTo(BF_QuestDestination(q[1], q[5])) end
                 BF_CurTarget = t
                 BF_DbgScan("Level", q[1], BF_Destination and BF_Destination.Position or nil, q[5], t ~= nil)
             else
@@ -2506,7 +2541,7 @@ local success, err = pcall(function()
                     t = BF_FindEnemy(name); if t then mobFound = name; break end
                 end
             end
-            if t then BF_Destination = nil else BF_GoTo(BF_QuestCFrame["HauntedQuest2"]) end
+            if t then BF_Destination = nil else BF_GoTo(BF_QuestDestination("HauntedQuest2", mobFound or BF_BoneMobs[1])) end
             BF_CurTarget = t
             BF_DbgScan("Bones", "HauntedQuest2", BF_Destination and BF_Destination.Position or nil, mobFound or BF_BoneMobs[1], t ~= nil)
             return
@@ -2525,7 +2560,7 @@ local success, err = pcall(function()
             elseif mob then
                 for _, q in ipairs(BF_Quests) do
                     if q[5] == mob and BF_QuestCFrame[q[1]] then
-                        BF_GoTo(BF_QuestCFrame[q[1]]); questKey = q[1]; break
+                        BF_GoTo(BF_QuestDestination(q[1], mob)); questKey = q[1]; break
                     end
                 end
             end
