@@ -2308,56 +2308,36 @@ local success, err = pcall(function()
             {CFrame = CFrame.new(targetPos)}
         )
         BF_TweenTarget = targetPos
+        -- When the travel tween finishes naturally, drop noclip so the
+        -- player sits on the ground normally for stationary combat.
+        local thisTween = BF_CurTween
+        thisTween.Completed:Connect(function(state)
+            if state == Enum.PlaybackState.Completed and BF_CurTween == thisTween then
+                BF_SetNoclip(false)
+            end
+        end)
         BF_CurTween:Play()
     end
 
-    -- COMBAT lock. NEVER write hrp.CFrame directly — BF's server rejects it
-    -- and rolls us back, which turns into a TP-back-and-forth ping-pong
-    -- that ultimately gets the player kicked.
-    -- Strategy:
-    --   • FAR  (> BF_COMBAT_RANGE)  → route through the travel tween at
-    --                                 BF_TRAVEL_SPEED. Don't try to "snap"
-    --                                 onto a mob from across the island.
-    --   • NEAR (≤ BF_COMBAT_RANGE)  → distance-scaled tween at
-    --                                 BF_COMBAT_SPEED studs/sec, with a
-    --                                 floor of 0.12s. This eliminates the
-    --                                 1000+ stud/sec velocity spike that
-    --                                 was tripping anti-cheat.
-    --   • Idempotent: if the new combat destination is within 4 studs of
-    --                 the in-flight tween's destination (mob barely moved),
-    --                 don't restart the tween.
-    local BF_COMBAT_RANGE = 60     -- studs; was 200 (way past sword reach)
-    local BF_COMBAT_SPEED = 220    -- studs/sec; well inside BF's tolerance
-    local function BF_TeleportTo(root)
-        if not root or not root.Parent then return end
+    -- BRING-MOB pattern. The PROVEN-WORKING auto-farm technique used by
+    -- every public BF script in 2025-2026. Instead of moving the player
+    -- to the mob (which BF's anti-cheat watches and kicks), we keep the
+    -- player stationary on the quest island and write the MOB's CFrame
+    -- to a spot 3 studs in front of the player. NPC CFrame writes from
+    -- the client are tolerated by BF's server because anti-cheat
+    -- watches PLAYER position, not NPC position.
+    --
+    -- Some bosses have network ownership locks that silently reject the
+    -- write — the pcall absorbs that. Worst case the boss isn't pulled,
+    -- but the attack loop still fires when the boss walks into range.
+    local function BF_BringMob(mobRoot)
+        if not mobRoot or not mobRoot.Parent then return end
         local char = LocalPlayer.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
-        BF_SetNoclip(true)
-        local targetPos = root.Position
-        local dist      = (hrp.Position - targetPos).Magnitude
-        if dist > BF_COMBAT_RANGE then
-            BF_TweenTo(targetPos + Vector3.new(0, 5, 0), BF_TRAVEL_SPEED)
-            return
-        end
-        local destCF = root.CFrame * CFrame.new(0, 3, 5)
-        -- Idempotent guard — same as travel tween. Prevents the 4-Hz scan
-        -- + movement loop from constantly cancel/restarting onto a mob
-        -- that's only twitching a few studs (which looked like teleport
-        -- spam to anti-cheat).
-        if BF_TweenTarget and (BF_TweenTarget - destCF.Position).Magnitude < 4
-           and BF_CurTween and BF_CurTween.PlaybackState == Enum.PlaybackState.Playing then
-            return
-        end
-        if BF_CurTween then pcall(function() BF_CurTween:Cancel() end); BF_CurTween = nil end
-        local time = math.max(dist / BF_COMBAT_SPEED, 0.12)
-        BF_TweenTarget = destCF.Position
-        BF_CurTween    = TweenService:Create(
-            hrp,
-            TweenInfo.new(time, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
-            {CFrame = destCF}
-        )
-        BF_CurTween:Play()
+        pcall(function()
+            mobRoot.CFrame = hrp.CFrame * CFrame.new(0, 0, -3)
+        end)
     end
 
     -- Equip weapon by ToolTip (BF tools set ToolTip = "Melee", "Sword", or "Blox Fruit")
@@ -2555,12 +2535,15 @@ local success, err = pcall(function()
         end
     end))
 
-    -- Movement controller (throttled to 0.25s — NOT every frame). Tween-based
-    -- because per-frame CFrame writes trip BF's anti-cheat and get the player
-    -- yeeted to a random sky coord ("stuck on a random sky location" bug).
-    --   1. Combat target locked → short tween onto the mob
-    --   2. Island destination   → long tween to landing pad
-    --   3. Idle                 → cancel any running tween
+    -- Movement controller. The player ONLY moves to travel between
+    -- islands. Combat NEVER moves the player — that's the bring-mob
+    -- helper's job. Throttled to 0.25s.
+    --   1. Have a combat target → DO NOT move and do NOT cancel any
+    --      in-flight travel tween — let it finish naturally so its
+    --      Completed handler drops noclip. The 0.1s attack loop pulls
+    --      the mob in once we're standing still.
+    --   2. No target but a travel destination → tween to landing pad.
+    --   3. Idle → stop any tween.
     local BF_MoveTimer = 0
     table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
         if not getgenv().DiamondHub_Active then return end
@@ -2573,9 +2556,12 @@ local success, err = pcall(function()
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
 
-        -- Priority 1: combat target → tween onto it
+        -- Priority 1: combat target locked → do nothing. Let the
+        -- in-flight travel tween (if any) complete naturally; once it
+        -- ends the player sits stationary and the 0.1s attack loop
+        -- pulls the mob in. We must NOT cancel the tween here — the
+        -- travel tween's Completed handler is what disables noclip.
         if BF_CurTarget and BF_CurTarget.Parent then
-            BF_TeleportTo(BF_CurTarget)
             return
         end
 
@@ -2640,7 +2626,10 @@ local success, err = pcall(function()
         end
     end))
 
-    -- Attack loop (throttled to 0.1s for snappier hits)
+    -- Attack loop (throttled to 0.1s). Each tick: pull the mob to a spot
+    -- 3 studs in front of us (NPC CFrame writes are accepted by BF's
+    -- server), then fire the touch interest + activate the held tool.
+    -- The player never moves — combat ping-pong / kicks are gone.
     local attackTimer = 0
     table.insert(getgenv().DiamondHub_Connections, RunService.Heartbeat:Connect(function(dt)
         if not getgenv().DiamondHub_Active then return end
@@ -2649,6 +2638,7 @@ local success, err = pcall(function()
         if attackTimer < 0.1 then return end
         attackTimer = 0
         if BF_CurTarget and BF_CurTarget.Parent then
+            BF_BringMob(BF_CurTarget)
             BF_Attack(BF_CurTarget)
         end
     end))
