@@ -2060,15 +2060,48 @@ local success, err = pcall(function()
     -- Substring + case-insensitive match: BF mob model names sometimes have
     -- numeric suffixes ("Bandit_1", "Vampire2") or capitalization variants.
     -- Exact-match misses these, leaving the farm idle.
-    -- Normalize mob/quest names for matching: lowercase + strip ALL
-    -- whitespace and punctuation. BF model names are usually concatenated
-    -- ("SweetThief", "CocoaWarrior") while quest tables and UI labels use
-    -- spaces ("Sweet Thief", "Cocoa Warrior"). Without this, a substring
-    -- match like "sweet thief":find in "sweetthief" fails and the finder
-    -- returns nil — the bug we just hit on ChocQuest.
-    local function BF_NormName(s)
+    -- Helpers consolidated into a single table to stay under Lua's
+    -- 200-locals-per-function limit (the whole script lives in one
+    -- pcall function, so every top-level `local` here counts).
+    --
+    -- BFX.NormName  : lowercase + strip whitespace/punct, so quest table
+    --                 labels like "Sweet Thief" match BF model names
+    --                 like "SweetThief" or "sweet_thief".
+    -- BFX.FindAny   : find ANY mob with given name anywhere in the world
+    --                 (no distance limit) — used to discover the real
+    --                 quest island coords when the hardcoded value is wrong.
+    -- BFX.QuestDest : prefer live mob position over hardcoded BF_QuestCFrame.
+    -- BFX.BringMob  : NPC CFrame write (player stays put — anti-cheat safe).
+    local BFX = { dumped = false }
+    function BFX.NormName(s)
         if not s then return "" end
         return (s:lower():gsub("[%s%-_%.]+", ""))
+    end
+    function BFX.FindAny(mobName)
+        local enemies = workspace:FindFirstChild("Enemies")
+        if not enemies then return nil end
+        local needle = BFX.NormName(mobName)
+        if needle == "" then return nil end
+        for _, mob in ipairs(enemies:GetChildren()) do
+            if mob:IsA("Model") and mob.Name and BFX.NormName(mob.Name):find(needle, 1, true) then
+                local hum  = mob:FindFirstChildOfClass("Humanoid")
+                local root = mob:FindFirstChild("HumanoidRootPart")
+                if hum and root and hum.Health > 0 then return root end
+            end
+        end
+        if _G.BF_Debug and not BFX.dumped then
+            BFX.dumped = true
+            local names, n = {}, 0
+            for _, mob in ipairs(enemies:GetChildren()) do
+                if mob:IsA("Model") then
+                    n = n + 1
+                    if n <= 10 then table.insert(names, mob.Name) end
+                end
+            end
+            warn(string.format("[Diamond Hub BF] needle=%q matched 0 of %d enemies; sample: %s",
+                tostring(mobName), n, table.concat(names, ", ")))
+        end
+        return nil
     end
 
     local function BF_FindEnemy(mobName)
@@ -2077,11 +2110,11 @@ local success, err = pcall(function()
         local char = LocalPlayer.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
         local myPos = char.HumanoidRootPart.Position
-        local needle = mobName and BF_NormName(mobName) or nil
+        local needle = mobName and BFX.NormName(mobName) or nil
         if needle == "" then needle = nil end
         local nearest, bestDist = nil, BF_FIND_RADIUS
         for _, mob in ipairs(enemies:GetChildren()) do
-            local nameMatch = (not needle) or (mob.Name and BF_NormName(mob.Name):find(needle, 1, true) ~= nil)
+            local nameMatch = (not needle) or (mob.Name and BFX.NormName(mob.Name):find(needle, 1, true) ~= nil)
             if mob:IsA("Model") and nameMatch then
                 local hum  = mob:FindFirstChildOfClass("Humanoid")
                 local root = mob:FindFirstChild("HumanoidRootPart")
@@ -2092,40 +2125,6 @@ local success, err = pcall(function()
             end
         end
         return nearest
-    end
-
-    -- Find ANY mob with the given name anywhere in workspace.Enemies — no
-    -- distance limit. Used to dynamically discover the actual quest island
-    -- coordinates when the hardcoded BF_QuestCFrame entry is wrong/stale.
-    -- Returns the mob's HRP, or nil if no live instance exists in the world.
-    -- One-time debug dump on failure: prints up to 10 enemy names so we can
-    -- see what's actually in the workspace when our needle doesn't match.
-    local BF_DumpedEnemies = false
-    local function BF_FindMobAnywhere(mobName)
-        local enemies = workspace:FindFirstChild("Enemies")
-        if not enemies then return nil end
-        local needle = mobName and BF_NormName(mobName) or nil
-        if not needle or needle == "" then return nil end
-        for _, mob in ipairs(enemies:GetChildren()) do
-            if mob:IsA("Model") and mob.Name and BF_NormName(mob.Name):find(needle, 1, true) then
-                local hum  = mob:FindFirstChildOfClass("Humanoid")
-                local root = mob:FindFirstChild("HumanoidRootPart")
-                if hum and root and hum.Health > 0 then return root end
-            end
-        end
-        if _G.BF_Debug and not BF_DumpedEnemies then
-            BF_DumpedEnemies = true
-            local names, n = {}, 0
-            for _, mob in ipairs(enemies:GetChildren()) do
-                if mob:IsA("Model") then
-                    n = n + 1
-                    if n <= 10 then table.insert(names, mob.Name) end
-                end
-            end
-            warn(string.format("[Diamond Hub BF] needle=%q matched 0 of %d enemies; sample: %s",
-                mobName, n, table.concat(names, ", ")))
-        end
-        return nil
     end
 
     -- Quest island spawn locations (teleport here if no quest mob is loaded near us)
@@ -2172,8 +2171,8 @@ local success, err = pcall(function()
     -- position (always correct, self-healing against stale/wrong coords).
     -- Fall back to the hardcoded BF_QuestCFrame entry only if no live
     -- instance of the mob exists anywhere on the server.
-    local function BF_QuestDestination(questKey, mobName)
-        local live = mobName and BF_FindMobAnywhere(mobName)
+    function BFX.QuestDest(questKey, mobName)
+        local live = mobName and BFX.FindAny(mobName)
         if live then
             -- Aim 6 studs in front of and 4 above the mob so we land
             -- on the island floor next to it, not inside it.
@@ -2406,7 +2405,7 @@ local success, err = pcall(function()
     -- Some bosses have network ownership locks that silently reject the
     -- write — the pcall absorbs that. Worst case the boss isn't pulled,
     -- but the attack loop still fires when the boss walks into range.
-    local function BF_BringMob(mobRoot)
+    function BFX.BringMob(mobRoot)
         if not mobRoot or not mobRoot.Parent then return end
         local char = LocalPlayer.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
@@ -2538,7 +2537,7 @@ local success, err = pcall(function()
             if q then
                 BF_StartQuest(q[1], q[2])
                 local t = sticky and BF_CurTarget or BF_FindEnemy(q[5])
-                if t then BF_Destination = nil else BF_GoTo(BF_QuestDestination(q[1], q[5])) end
+                if t then BF_Destination = nil else BF_GoTo(BFX.QuestDest(q[1], q[5])) end
                 BF_CurTarget = t
                 BF_DbgScan("Level", q[1], BF_Destination and BF_Destination.Position or nil, q[5], t ~= nil)
             else
@@ -2566,7 +2565,7 @@ local success, err = pcall(function()
                     t = BF_FindEnemy(name); if t then mobFound = name; break end
                 end
             end
-            if t then BF_Destination = nil else BF_GoTo(BF_QuestDestination("HauntedQuest2", mobFound or BF_BoneMobs[1])) end
+            if t then BF_Destination = nil else BF_GoTo(BFX.QuestDest("HauntedQuest2", mobFound or BF_BoneMobs[1])) end
             BF_CurTarget = t
             BF_DbgScan("Bones", "HauntedQuest2", BF_Destination and BF_Destination.Position or nil, mobFound or BF_BoneMobs[1], t ~= nil)
             return
@@ -2585,7 +2584,7 @@ local success, err = pcall(function()
             elseif mob then
                 for _, q in ipairs(BF_Quests) do
                     if q[5] == mob and BF_QuestCFrame[q[1]] then
-                        BF_GoTo(BF_QuestDestination(q[1], mob)); questKey = q[1]; break
+                        BF_GoTo(BFX.QuestDest(q[1], mob)); questKey = q[1]; break
                     end
                 end
             end
@@ -2662,6 +2661,13 @@ local success, err = pcall(function()
     -- until the player has the requirements then auto-completes the purchase.
     -- One canonical remote call per item. Server no-ops on unmet prereqs,
     -- so toggles auto-complete the moment requirements are met.
+    -- The following chunk (Auto Buy, Attack loop, Auto Stats, ESP, Fruit
+    -- Notifier) is wrapped in `do ... end` so its locals (BF_BuyMap,
+    -- BF_BuyTimer, attackTimer, statsTimer, fruitTimer) don't count
+    -- toward the outer pcall function's 200-local limit. Closures over
+    -- outer locals still work fine — Lua scoping only affects where a
+    -- `local` is reachable, not what an upvalue can capture.
+    do
     local BF_BuyMap = {
         -- ── Swords ──────────────────────────────────────────────
         AutoBuy_TrueTripleKatana = { {"BuyTrueTripleKatana"} },
@@ -2714,7 +2720,7 @@ local success, err = pcall(function()
         if attackTimer < 0.1 then return end
         attackTimer = 0
         if BF_CurTarget and BF_CurTarget.Parent then
-            BF_BringMob(BF_CurTarget)
+            BFX.BringMob(BF_CurTarget)
             BF_Attack(BF_CurTarget)
         end
     end))
@@ -2786,6 +2792,7 @@ local success, err = pcall(function()
             end
         end)
     end))
+    end -- end of do-block scoping BF_BuyMap/BF_BuyTimer/attackTimer/statsTimer/fruitTimer
 
     --// ============================================================
     --//  NAVIGATION
