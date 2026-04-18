@@ -2119,7 +2119,7 @@ local success, err = pcall(function()
         ["IceCreamIslandQuest"] = CFrame.new(-902,  445,-10963),
         ["CakeQuest1"]          = CFrame.new(-1812,  19,-11862),
         ["CakeQuest2"]          = CFrame.new(-1812,  19,-11862),
-        ["ChocQuest"]           = CFrame.new(-12702,422,-7570),
+        ["ChocQuest"]           = CFrame.new(-12702,332,-7570),
     }
 
     -- Boss spawn locations
@@ -2291,6 +2291,19 @@ local success, err = pcall(function()
         local char = LocalPlayer.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp or not targetPos then return end
+        -- Already at the destination? Skip. Critical for the case where
+        -- the travel tween has completed and gravity is settling us onto
+        -- the island floor — without this guard, every 0.25s move tick
+        -- would re-tween us back UP to the landing pad (Y +15) forever,
+        -- creating the "jumps up and down" bug at sky islands like
+        -- ChocQuest, IceCreamIslandQuest, SnowMountainQuest, SkyExp*.
+        if (hrp.Position - targetPos).Magnitude < 8 then
+            -- Make sure noclip is off so we sit on the island normally.
+            if not BF_CurTween or BF_CurTween.PlaybackState ~= Enum.PlaybackState.Playing then
+                BF_SetNoclip(false)
+            end
+            return
+        end
         if BF_TweenTarget and (BF_TweenTarget - targetPos).Magnitude < 4
            and BF_CurTween and BF_CurTween.PlaybackState == Enum.PlaybackState.Playing then
             return
