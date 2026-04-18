@@ -2291,14 +2291,17 @@ local success, err = pcall(function()
         local char = LocalPlayer.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp or not targetPos then return end
-        -- Already at the destination? Skip. Critical for the case where
-        -- the travel tween has completed and gravity is settling us onto
-        -- the island floor — without this guard, every 0.25s move tick
-        -- would re-tween us back UP to the landing pad (Y +15) forever,
-        -- creating the "jumps up and down" bug at sky islands like
-        -- ChocQuest, IceCreamIslandQuest, SnowMountainQuest, SkyExp*.
-        if (hrp.Position - targetPos).Magnitude < 8 then
-            -- Make sure noclip is off so we sit on the island normally.
+        -- Already on the destination island? Skip. Check HORIZONTAL
+        -- distance only (X/Z) — once we land, gravity pulls us off
+        -- the +15 landing pad onto the real island floor, which can
+        -- be 15-100+ studs lower on sky islands (ChocQuest,
+        -- IceCreamIslandQuest, SnowMountainQuest, SkyExp*, ZQuest).
+        -- A full 3D check would still see us "far" from the pad
+        -- after gravity settled and re-fire the tween upward, which
+        -- is the "jumps up and down" bug.
+        local horiz = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z)
+                     - Vector3.new(targetPos.X,    0, targetPos.Z)).Magnitude
+        if horiz < 12 then
             if not BF_CurTween or BF_CurTween.PlaybackState ~= Enum.PlaybackState.Playing then
                 BF_SetNoclip(false)
             end
