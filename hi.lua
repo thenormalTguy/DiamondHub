@@ -2060,16 +2060,28 @@ local success, err = pcall(function()
     -- Substring + case-insensitive match: BF mob model names sometimes have
     -- numeric suffixes ("Bandit_1", "Vampire2") or capitalization variants.
     -- Exact-match misses these, leaving the farm idle.
+    -- Normalize mob/quest names for matching: lowercase + strip ALL
+    -- whitespace and punctuation. BF model names are usually concatenated
+    -- ("SweetThief", "CocoaWarrior") while quest tables and UI labels use
+    -- spaces ("Sweet Thief", "Cocoa Warrior"). Without this, a substring
+    -- match like "sweet thief":find in "sweetthief" fails and the finder
+    -- returns nil — the bug we just hit on ChocQuest.
+    local function BF_NormName(s)
+        if not s then return "" end
+        return (s:lower():gsub("[%s%-_%.]+", ""))
+    end
+
     local function BF_FindEnemy(mobName)
         local enemies = workspace:FindFirstChild("Enemies")
         if not enemies then return nil end
         local char = LocalPlayer.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
         local myPos = char.HumanoidRootPart.Position
-        local needle = mobName and mobName:lower() or nil
+        local needle = mobName and BF_NormName(mobName) or nil
+        if needle == "" then needle = nil end
         local nearest, bestDist = nil, BF_FIND_RADIUS
         for _, mob in ipairs(enemies:GetChildren()) do
-            local nameMatch = (not needle) or (mob.Name and mob.Name:lower():find(needle, 1, true) ~= nil)
+            local nameMatch = (not needle) or (mob.Name and BF_NormName(mob.Name):find(needle, 1, true) ~= nil)
             if mob:IsA("Model") and nameMatch then
                 local hum  = mob:FindFirstChildOfClass("Humanoid")
                 local root = mob:FindFirstChild("HumanoidRootPart")
@@ -2084,21 +2096,34 @@ local success, err = pcall(function()
 
     -- Find ANY mob with the given name anywhere in workspace.Enemies — no
     -- distance limit. Used to dynamically discover the actual quest island
-    -- coordinates when the hardcoded BF_QuestCFrame entry is wrong/stale
-    -- (BF moves/renames quest islands across updates). As long as ANY player
-    -- on the server is keeping the mob alive, this finds the real location.
+    -- coordinates when the hardcoded BF_QuestCFrame entry is wrong/stale.
     -- Returns the mob's HRP, or nil if no live instance exists in the world.
+    -- One-time debug dump on failure: prints up to 10 enemy names so we can
+    -- see what's actually in the workspace when our needle doesn't match.
+    local BF_DumpedEnemies = false
     local function BF_FindMobAnywhere(mobName)
         local enemies = workspace:FindFirstChild("Enemies")
         if not enemies then return nil end
-        local needle = mobName and mobName:lower() or nil
-        if not needle then return nil end
+        local needle = mobName and BF_NormName(mobName) or nil
+        if not needle or needle == "" then return nil end
         for _, mob in ipairs(enemies:GetChildren()) do
-            if mob:IsA("Model") and mob.Name and mob.Name:lower():find(needle, 1, true) then
+            if mob:IsA("Model") and mob.Name and BF_NormName(mob.Name):find(needle, 1, true) then
                 local hum  = mob:FindFirstChildOfClass("Humanoid")
                 local root = mob:FindFirstChild("HumanoidRootPart")
                 if hum and root and hum.Health > 0 then return root end
             end
+        end
+        if _G.BF_Debug and not BF_DumpedEnemies then
+            BF_DumpedEnemies = true
+            local names, n = {}, 0
+            for _, mob in ipairs(enemies:GetChildren()) do
+                if mob:IsA("Model") then
+                    n = n + 1
+                    if n <= 10 then table.insert(names, mob.Name) end
+                end
+            end
+            warn(string.format("[Diamond Hub BF] needle=%q matched 0 of %d enemies; sample: %s",
+                mobName, n, table.concat(names, ", ")))
         end
         return nil
     end
