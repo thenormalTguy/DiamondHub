@@ -1630,7 +1630,12 @@ local success, err = pcall(function()
     end
 
     --// ─── HOME TAB ─────────────────────────────────────────────────
-
+    -- Wrapped in `do ... end` so its 12+ build-only locals
+    -- (BF_GreetCard, BF_AvatarImg, BF_ColWrap, BF_CL, BF_SessCard,
+    -- BF_SessPill, BF_HubCard, BF_ActPill, BF_GDot, BF_VerPill2,
+    -- BF_DiscRow, BF_DiscBtn) don't count toward the outer pcall
+    -- function's 200-local limit.
+    do
     local BF_GreetCard = MakeCard(BF_HomeTab, 68)
     local BF_AvatarImg = Instance.new("ImageLabel", BF_GreetCard)
     BF_AvatarImg.Size = UDim2.new(0,44,0,44); BF_AvatarImg.Position = UDim2.new(0,12,0.5,-22)
@@ -1733,6 +1738,7 @@ local success, err = pcall(function()
     })
     BF_DiscBtn.MouseEnter:Connect(function() Tween(BF_DiscBtn, 0.13, {BackgroundColor3 = Color3.fromRGB(100,110,240)}) end)
     BF_DiscBtn.MouseLeave:Connect(function() Tween(BF_DiscBtn, 0.13, {BackgroundColor3 = Color3.fromRGB(78,86,210)}) end)
+    end -- end Home Tab do-block
 
     --// ─── MAIN TAB ─────────────────────────────────────────────────
 
