@@ -2077,29 +2077,67 @@ local success, err = pcall(function()
         if not s then return "" end
         return (s:lower():gsub("[%s%-_%.]+", ""))
     end
+    -- Scan the ENTIRE workspace (not just workspace.Enemies) for a live
+    -- mob whose name matches `mobName`. BF only spawns enemies when a
+    -- player is near the island, so workspace.Enemies is usually empty
+    -- when we're idle in the air or on another island. Falling back to
+    -- a full descendants walk lets us catch mobs wherever BF puts them.
+    -- Cheap because we early-out on first hit and only walk on cache miss.
     function BFX.FindAny(mobName)
-        local enemies = workspace:FindFirstChild("Enemies")
-        if not enemies then return nil end
         local needle = BFX.NormName(mobName)
         if needle == "" then return nil end
-        for _, mob in ipairs(enemies:GetChildren()) do
-            if mob:IsA("Model") and mob.Name and BFX.NormName(mob.Name):find(needle, 1, true) then
-                local hum  = mob:FindFirstChildOfClass("Humanoid")
-                local root = mob:FindFirstChild("HumanoidRootPart")
-                if hum and root and hum.Health > 0 then return root end
+        local function tryRoot(mob)
+            if not mob:IsA("Model") or not mob.Name then return nil end
+            if not BFX.NormName(mob.Name):find(needle, 1, true) then return nil end
+            local hum  = mob:FindFirstChildOfClass("Humanoid")
+            local root = mob:FindFirstChild("HumanoidRootPart")
+            if hum and root and hum.Health > 0 then return root end
+            return nil
+        end
+        -- Fast path: workspace.Enemies (the usual home).
+        local enemies = workspace:FindFirstChild("Enemies")
+        if enemies then
+            for _, mob in ipairs(enemies:GetChildren()) do
+                local r = tryRoot(mob); if r then return r end
             end
+        end
+        -- Slow path: full workspace walk. Only runs when the fast path missed.
+        for _, mob in ipairs(workspace:GetDescendants()) do
+            local r = tryRoot(mob); if r then return r end
         end
         if _G.BF_Debug and not BFX.dumped then
             BFX.dumped = true
-            local names, n = {}, 0
-            for _, mob in ipairs(enemies:GetChildren()) do
-                if mob:IsA("Model") then
-                    n = n + 1
-                    if n <= 10 then table.insert(names, mob.Name) end
+            -- Dump top-level workspace folder names + count of Models with
+            -- Humanoid in each, plus any near-match enemy names. Tells us
+            -- where BF actually keeps mobs / what their real names are.
+            local lines = {}
+            for _, child in ipairs(workspace:GetChildren()) do
+                if child:IsA("Folder") or child:IsA("Model") then
+                    local nMobs = 0
+                    for _, d in ipairs(child:GetDescendants()) do
+                        if d:IsA("Humanoid") then nMobs = nMobs + 1 end
+                    end
+                    if nMobs > 0 then
+                        table.insert(lines, child.Name .. "(" .. nMobs .. ")")
+                    end
                 end
             end
-            warn(string.format("[Diamond Hub BF] needle=%q matched 0 of %d enemies; sample: %s",
-                tostring(mobName), n, table.concat(names, ", ")))
+            warn(string.format("[Diamond Hub BF] needle=%q not found anywhere; folders w/ humanoids: %s",
+                tostring(mobName), table.concat(lines, ", ")))
+            -- Also list ALL live humanoid model names (truncated to 25) so we
+            -- can see what BF actually spawned and fix the quest table.
+            local seen = {}
+            for _, d in ipairs(workspace:GetDescendants()) do
+                if d:IsA("Humanoid") and d.Health > 0 then
+                    local m = d.Parent
+                    if m and m.Name and not seen[m.Name] then
+                        seen[m.Name] = true
+                        table.insert(lines, m.Name)
+                        if #lines > 35 then break end
+                    end
+                end
+            end
+            warn("[Diamond Hub BF] live mob names sample: " .. table.concat(lines, ", "))
         end
         return nil
     end
