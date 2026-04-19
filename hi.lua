@@ -2329,11 +2329,18 @@ local success, err = pcall(function()
         -- (the scan loop does this every 0.5s while waiting) leaves arrival
         -- state intact so the 3 s grace and 5 s stuck windows still apply.
         if cf and BF_Destination and (cf.Position - BF_Destination.Position).Magnitude > 4 then
+            -- Coord changed (typically the single retry after STUCK).
+            -- Reset arrival state (it belongs to the OLD coord), but do
+            -- NOT touch BFX.retried — that's lifecycle state owned by the
+            -- farm mode and resetting it here would refund the retry the
+            -- caller just consumed, allowing infinite re-routing.
             BFX.arrivedAt    = nil
             BFX.arrivedCoord = nil
             BFX.stuckWarned  = false
         elseif cf and not BF_Destination then
-            -- Brand-new travel order with no previous destination — start fresh.
+            -- Brand-new travel order with no previous destination —
+            -- arrival state is per-coord so reset it. Retry budget is
+            -- managed by the farm mode at the "fresh hunt cycle" gate.
             BFX.arrivedAt    = nil
             BFX.arrivedCoord = nil
             BFX.stuckWarned  = false
@@ -2646,8 +2653,18 @@ local success, err = pcall(function()
                   or (_G.BF_Config.AutoMaterial and "Material")
                   or (_G.BF_Config.AutoBoss    and "Boss")
         if mode ~= BF_LastMode then
-            BF_CurTarget = nil
-            BF_LastMode  = mode
+            -- Mode changed (e.g. AutoFarm → AutoBoss, or farm toggled off).
+            -- Clear ALL travel + retry lifecycle state so the new mode
+            -- recomputes its own destination from scratch on this tick.
+            -- Without this, the sticky-destination gate would keep us
+            -- pinned to the previous mode's coord forever.
+            BF_CurTarget     = nil
+            BF_Destination   = nil
+            BFX.arrivedAt    = nil
+            BFX.arrivedCoord = nil
+            BFX.stuckWarned  = false
+            BFX.retried      = false
+            BF_LastMode      = mode
         end
 
         -- Sticky targeting: keep the current target until it's dead.
@@ -2663,9 +2680,26 @@ local success, err = pcall(function()
                 BF_StartQuest(q[1], q[2])
                 local t = sticky and BF_CurTarget or BF_FindEnemy(q[5])
                 if t then
+                    -- Engaged a target. Drop travel and reset the
+                    -- single-retry budget for the next stuck window.
                     BF_Destination = nil
+                    BFX.retried    = false
                 else
-                    BF_GoTo(BFX.QuestDest(q[1], q[5]))
+                    -- STICKY DESTINATION: only recompute QuestDest when
+                    --   (a) we have no destination yet (fresh hunt cycle), OR
+                    --   (b) we fully arrived, the 5s STUCK warning fired,
+                    --       and we haven't yet used the one allowed retry.
+                    -- Otherwise leave BF_Destination alone so the tween
+                    -- can finish — fixes the "TPs to 3 spots and loops"
+                    -- bug caused by QuestDest's non-deterministic output
+                    -- changing every 0.5s scan tick.
+                    local needRoute = (BF_Destination == nil)
+                    if needRoute then
+                        BFX.retried = false  -- fresh hunt cycle, fresh retry budget
+                    elseif BFX.stuckWarned and not BFX.retried then
+                        needRoute = true; BFX.retried = true
+                    end
+                    if needRoute then BF_GoTo(BFX.QuestDest(q[1], q[5])) end
                     BFX.CheckStuck(q[1], q[5])
                 end
                 BF_CurTarget = t
@@ -2697,8 +2731,16 @@ local success, err = pcall(function()
             end
             if t then
                 BF_Destination = nil
+                BFX.retried    = false
             else
-                BF_GoTo(BFX.QuestDest("HauntedQuest2", mobFound or BF_BoneMobs[1]))
+                -- Sticky destination — see Level mode comment above.
+                local needRoute = (BF_Destination == nil)
+                if needRoute then
+                    BFX.retried = false
+                elseif BFX.stuckWarned and not BFX.retried then
+                    needRoute = true; BFX.retried = true
+                end
+                if needRoute then BF_GoTo(BFX.QuestDest("HauntedQuest2", mobFound or BF_BoneMobs[1])) end
                 BFX.CheckStuck("HauntedQuest2", mobFound or BF_BoneMobs[1])
             end
             BF_CurTarget = t
@@ -2716,10 +2758,26 @@ local success, err = pcall(function()
             local questKey = nil
             if t then
                 BF_Destination = nil
+                BFX.retried    = false
             elseif mob then
-                for _, q in ipairs(BF_Quests) do
-                    if q[5] == mob and BF_QuestCFrame[q[1]] then
-                        BF_GoTo(BFX.QuestDest(q[1], mob)); questKey = q[1]; break
+                -- Sticky destination — see Level mode comment above.
+                local needRoute = (BF_Destination == nil)
+                if needRoute then
+                    BFX.retried = false
+                elseif BFX.stuckWarned and not BFX.retried then
+                    needRoute = true; BFX.retried = true
+                end
+                if needRoute then
+                    for _, q in ipairs(BF_Quests) do
+                        if q[5] == mob and BF_QuestCFrame[q[1]] then
+                            BF_GoTo(BFX.QuestDest(q[1], mob)); questKey = q[1]; break
+                        end
+                    end
+                else
+                    -- Find questKey for the existing destination so logging
+                    -- still shows the right quest tag while we wait.
+                    for _, q in ipairs(BF_Quests) do
+                        if q[5] == mob and BF_QuestCFrame[q[1]] then questKey = q[1]; break end
                     end
                 end
                 BFX.CheckStuck(questKey, mob)
@@ -2737,8 +2795,16 @@ local success, err = pcall(function()
             local t = sticky and BF_CurTarget or (name and BF_FindBoss(name)) or nil
             if t then
                 BF_Destination = nil
+                BFX.retried    = false
             elseif name and BF_BossCFrame[name] then
-                BF_GoTo(BF_BossCFrame[name])
+                -- Sticky destination — see Level mode comment above.
+                local needRoute = (BF_Destination == nil)
+                if needRoute then
+                    BFX.retried = false
+                elseif BFX.stuckWarned and not BFX.retried then
+                    needRoute = true; BFX.retried = true
+                end
+                if needRoute then BF_GoTo(BF_BossCFrame[name]) end
                 BFX.CheckStuck(name, name)
             end
             BF_CurTarget = t
