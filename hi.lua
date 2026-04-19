@@ -2199,6 +2199,15 @@ local success, err = pcall(function()
         ["GraveyardQuest"]      = CFrame.new(-5972,  22,-1411),
         ["PiratePortQuest"]     = CFrame.new(-290,   43, 5577),
         -- 3rd Sea
+        -- Coords audited against BF_BossCFrame as ground truth.
+        -- ChocQuest: was (-12702, 332, -7570) which lands in empty ocean
+        --   between Beautiful Pirate (-12009) and Rip_indra (-13059).
+        --   Real Chocolate Island quest-giver sits at the cluster with
+        --   Captain Elephant (-12127, 332, -7625) and Beautiful Pirate
+        --   (-12009, 332, -7393). Use the verified quest-giver coord.
+        -- CakeQuest1/2: was Y=19 which is sea-level, but Cake Queen
+        --   (Y=39) and Dough King (Y=38) confirm the island floor is
+        --   ~Y=38. Old Y=19 dropped the player into the sea below.
         ["AmazonQuest"]         = CFrame.new(5814,   52,-1118),
         ["MarineTreeIsland"]    = CFrame.new(2333,   26,-6738),
         ["DeepForestIsland"]    = CFrame.new(-9510, 143, 5557),
@@ -2206,10 +2215,45 @@ local success, err = pcall(function()
         ["HauntedQuest1"]       = CFrame.new(-9518, 143, 5567),
         ["HauntedQuest2"]       = CFrame.new(-9518, 143, 5567),
         ["IceCreamIslandQuest"] = CFrame.new(-902,  445,-10963),
-        ["CakeQuest1"]          = CFrame.new(-1812,  19,-11862),
-        ["CakeQuest2"]          = CFrame.new(-1812,  19,-11862),
-        ["ChocQuest"]           = CFrame.new(-12702,332,-7570),
+        ["CakeQuest1"]          = CFrame.new(-1932,  38,-11944),
+        ["CakeQuest2"]          = CFrame.new(-1932,  38,-11944),
+        ["ChocQuest"]           = CFrame.new(-12063,332, -7551),
     }
+
+    -- Stuck-on-island diagnostic. After the travel tween's Completed
+    -- handler stamps BFX.arrivedAt, the scan loop calls this every tick.
+    -- If we've been parked on the destination for ≥5 s with still no
+    -- target found, fire one F9 warn that includes the arrival coord,
+    -- the expected mob name, and any humanoids that DID stream in
+    -- nearby. Converts silent looping into an actionable log line.
+    function BFX.CheckStuck(questKey, mobName)
+        if not BFX.arrivedAt or BFX.stuckWarned then return end
+        if (tick() - BFX.arrivedAt) < 5 then return end
+        BFX.stuckWarned = true
+        local coord = BFX.arrivedCoord
+        local nearby, n = {}, 0
+        if coord then
+            local seen = {}
+            for _, d in ipairs(workspace:GetDescendants()) do
+                if d:IsA("Humanoid") and d.Health > 0 then
+                    local m = d.Parent
+                    if m and m.Name and not seen[m.Name] then
+                        local root = m:FindFirstChild("HumanoidRootPart")
+                        if root and (root.Position - coord).Magnitude < 400 then
+                            seen[m.Name] = true
+                            n = n + 1
+                            if n <= 12 then table.insert(nearby, m.Name) end
+                        end
+                    end
+                end
+            end
+        end
+        warn(string.format(
+            "[Diamond Hub BF] STUCK: arrived at %s 5s ago for quest=%s mob=%q but no target found. Nearby humanoids (%d): %s",
+            coord and string.format("(%d,%d,%d)", coord.X, coord.Y, coord.Z) or "?",
+            tostring(questKey), tostring(mobName), n, table.concat(nearby, ", ")
+        ))
+    end
 
     -- Resolve the travel CFrame for a quest. Prefer the live mob's actual
     -- position (always correct, self-healing against stale/wrong coords).
@@ -2278,6 +2322,22 @@ local success, err = pcall(function()
         -- every frame, so leaving it set keeps the player on the island while
         -- mobs stream in. Once a mob loads within range, the scan loop sets
         -- BF_CurTarget and clears BF_Destination, and combat lock takes over.
+        --
+        -- When the destination changes to a NEW coord, clear stale arrival
+        -- state so CheckStuck doesn't fire a false warning based on the
+        -- previous island's arrival timestamp. Re-issuing the SAME coord
+        -- (the scan loop does this every 0.5s while waiting) leaves arrival
+        -- state intact so the 3 s grace and 5 s stuck windows still apply.
+        if cf and BF_Destination and (cf.Position - BF_Destination.Position).Magnitude > 4 then
+            BFX.arrivedAt    = nil
+            BFX.arrivedCoord = nil
+            BFX.stuckWarned  = false
+        elseif cf and not BF_Destination then
+            -- Brand-new travel order with no previous destination — start fresh.
+            BFX.arrivedAt    = nil
+            BFX.arrivedCoord = nil
+            BFX.stuckWarned  = false
+        end
         BF_Destination = cf
     end
 
@@ -2328,11 +2388,26 @@ local success, err = pcall(function()
     --   dest  : "(x, y, z)" of teleport pad or "-"
     --   mob   : mob name being searched ("Bandit") or "-"
     --   found : "yes" / "no"
+    -- Status reporter. Three states for `found`:
+    --   yes      — engaged a target this tick.
+    --   no       — at destination ≥3 s with still no target (real failure).
+    --   streaming— either still travelling, or arrived <3 s ago and giving
+    --              BF time to stream mobs in. Suppresses noisy "found=no"
+    --              spam during the warm-up window so the user only sees a
+    --              real failure when one actually exists.
     local function BF_DbgScan(mode, quest, destPos, mob, found)
         if not _G.BF_Debug then return end
         local destStr = destPos and string.format("(%d,%d,%d)", destPos.X, destPos.Y, destPos.Z) or "-"
+        local foundStr
+        if found then
+            foundStr = "yes"
+        elseif not BFX.arrivedAt or (tick() - BFX.arrivedAt) < 3 then
+            foundStr = "streaming"
+        else
+            foundStr = "no"
+        end
         local line = string.format("[Diamond Hub BF] mode=%s quest=%s dest=%s mob=%s found=%s",
-            mode or "-", quest or "-", destStr, mob or "-", found and "yes" or "no")
+            mode or "-", quest or "-", destStr, mob or "-", foundStr)
         if line ~= BF_LastScanLine then warn(line); BF_LastScanLine = line end
     end
 
@@ -2429,10 +2504,16 @@ local success, err = pcall(function()
         BF_TweenTarget = targetPos
         -- When the travel tween finishes naturally, drop noclip so the
         -- player sits on the ground normally for stationary combat.
+        -- Also stamp BFX.arrivedAt so the scan loop knows when we landed
+        -- (so it can wait ~3 s for BF to stream mobs in before declaring
+        -- "found=no", and fire a stuck diagnostic after 5 s).
         local thisTween = BF_CurTween
         thisTween.Completed:Connect(function(state)
             if state == Enum.PlaybackState.Completed and BF_CurTween == thisTween then
                 BF_SetNoclip(false)
+                BFX.arrivedAt    = tick()
+                BFX.stuckWarned  = false
+                BFX.arrivedCoord = targetPos
             end
         end)
         BF_CurTween:Play()
@@ -2581,7 +2662,12 @@ local success, err = pcall(function()
             if q then
                 BF_StartQuest(q[1], q[2])
                 local t = sticky and BF_CurTarget or BF_FindEnemy(q[5])
-                if t then BF_Destination = nil else BF_GoTo(BFX.QuestDest(q[1], q[5])) end
+                if t then
+                    BF_Destination = nil
+                else
+                    BF_GoTo(BFX.QuestDest(q[1], q[5]))
+                    BFX.CheckStuck(q[1], q[5])
+                end
                 BF_CurTarget = t
                 BF_DbgScan("Level", q[1], BF_Destination and BF_Destination.Position or nil, q[5], t ~= nil)
             else
@@ -2609,7 +2695,12 @@ local success, err = pcall(function()
                     t = BF_FindEnemy(name); if t then mobFound = name; break end
                 end
             end
-            if t then BF_Destination = nil else BF_GoTo(BFX.QuestDest("HauntedQuest2", mobFound or BF_BoneMobs[1])) end
+            if t then
+                BF_Destination = nil
+            else
+                BF_GoTo(BFX.QuestDest("HauntedQuest2", mobFound or BF_BoneMobs[1]))
+                BFX.CheckStuck("HauntedQuest2", mobFound or BF_BoneMobs[1])
+            end
             BF_CurTarget = t
             BF_DbgScan("Bones", "HauntedQuest2", BF_Destination and BF_Destination.Position or nil, mobFound or BF_BoneMobs[1], t ~= nil)
             return
@@ -2631,6 +2722,7 @@ local success, err = pcall(function()
                         BF_GoTo(BFX.QuestDest(q[1], mob)); questKey = q[1]; break
                     end
                 end
+                BFX.CheckStuck(questKey, mob)
             end
             BF_CurTarget = t
             BF_DbgScan("Material", questKey, BF_Destination and BF_Destination.Position or nil, mob, t ~= nil)
@@ -2647,6 +2739,7 @@ local success, err = pcall(function()
                 BF_Destination = nil
             elseif name and BF_BossCFrame[name] then
                 BF_GoTo(BF_BossCFrame[name])
+                BFX.CheckStuck(name, name)
             end
             BF_CurTarget = t
             BF_DbgScan("Boss", name, BF_Destination and BF_Destination.Position or nil, name, t ~= nil)
